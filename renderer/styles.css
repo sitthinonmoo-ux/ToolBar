@@ -17,8 +17,8 @@
   --danger-soft: #2a1215;
   --warning: #ffc247;
   --warning-soft: #2a2110;
-  --glow: 0 8px 28px rgba(0, 0, 0, 0.5), 0 0 22px rgba(47, 227, 255, 0.06);
-  --glow-strong: 0 14px 34px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(47, 227, 255, 0.1);
+  --glow: 0 8px 28px rgba(0, 0, 0, 0.5), 0 0 22px color-mix(in srgb, var(--accent-2) 6%, transparent);
+  --glow-strong: 0 14px 34px rgba(0, 0, 0, 0.6), 0 0 0 1px color-mix(in srgb, var(--accent-2) 10%, transparent);
 
   --accent-gradient: linear-gradient(100deg, var(--accent-1), var(--accent-2));
   --font-display: 'Chakra Petch', 'Noto Sans Thai', sans-serif;
@@ -26,6 +26,24 @@
   --font-mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
   --radius: 0px;
   --notch: 10px;
+}
+
+/* Theme picker: only the accent hues swap per theme — background/card/text tones stay
+   put, so switching themes never risks a low-contrast or broken-looking combination. */
+[data-theme="violet"] {
+  --accent-1: #8b5cf6; --accent-2: #c084fc; --accent-soft: #241636; --card-border-hover: #c084fc;
+}
+[data-theme="magenta"] {
+  --accent-1: #ec4899; --accent-2: #ff6ec7; --accent-soft: #2c1224; --card-border-hover: #ff6ec7;
+}
+[data-theme="amber"] {
+  --accent-1: #f59e0b; --accent-2: #ffd166; --accent-soft: #2c2109; --card-border-hover: #ffd166;
+}
+[data-theme="emerald"] {
+  --accent-1: #10b981; --accent-2: #34f5b0; --accent-soft: #0a2a1f; --card-border-hover: #34f5b0;
+}
+[data-theme="crimson"] {
+  --accent-1: #ef4444; --accent-2: #ff7a7a; --accent-soft: #2c1212; --card-border-hover: #ff7a7a;
 }
 
 * { box-sizing: border-box; }
@@ -330,6 +348,25 @@ input, textarea, select { cursor: auto !important; }
 .view-dashboard, .view-connect, .view-tools { height: 100%; }
 
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+
+.theme-panel {
+  padding: 18px 20px; background: var(--card-bg); border: 1px solid var(--card-border);
+  margin-bottom: 18px;
+}
+.theme-panel h3 { margin: 0 0 4px; font-size: 13px; font-weight: 700; }
+.theme-panel .field-hint { margin: 0 0 12px; }
+.theme-swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.theme-swatch {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  background: var(--card-bg-alt); border: 1px solid var(--card-border); cursor: pointer;
+  font-size: 12px; color: var(--text-secondary); transition: border-color .15s, color .15s;
+}
+.theme-swatch:hover { color: var(--text-primary); }
+.theme-swatch.active { border-color: var(--swatch-accent); color: var(--text-primary); }
+.theme-swatch-dot {
+  width: 14px; height: 14px; border-radius: 50%; background: var(--swatch-accent);
+  box-shadow: 0 0 8px var(--swatch-accent);
+}
 
 /* ---------------- tool cards ---------------- */
 .tool-card {

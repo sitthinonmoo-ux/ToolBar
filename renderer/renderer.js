@@ -14,6 +14,7 @@ const viewConnect = document.getElementById('view-connect');
 const viewApps = document.getElementById('view-apps');
 const healthPanel = document.getElementById('health-panel');
 const nextStepEl = document.getElementById('next-step');
+const themePanel = document.getElementById('theme-panel');
 
 function formatBytes(bytes) {
   if (!bytes) return '0 B';
@@ -50,6 +51,51 @@ function showUpdateToast(message, { actionLabel, onAction } = {}) {
   }
   toastStack.appendChild(el);
   updateToastEl = el;
+}
+
+// ---------------- theme picker ----------------
+// Colors here are cosmetic labels only — the actual hex values live in styles.css's
+// [data-theme="..."] blocks; swatchColor just needs to roughly match so the little dot
+// isn't lying about what you're about to pick.
+const THEMES = [
+  { id: 'cyan', swatchColor: '#2fe3ff' },
+  { id: 'violet', swatchColor: '#c084fc' },
+  { id: 'magenta', swatchColor: '#ff6ec7' },
+  { id: 'amber', swatchColor: '#ffd166' },
+  { id: 'emerald', swatchColor: '#34f5b0' },
+  { id: 'crimson', swatchColor: '#ff7a7a' },
+];
+const THEME_STORAGE_KEY = 'toolbar.theme';
+const themeSwatchesEl = document.getElementById('theme-swatches');
+
+function applyTheme(themeId, { save = true } = {}) {
+  if (themeId === 'cyan') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = themeId;
+  if (save) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, themeId);
+    } catch {
+      // localStorage can throw in a locked-down profile — theming still works for
+      // this session, it just won't be remembered next launch.
+    }
+  }
+  themeSwatchesEl.querySelectorAll('.theme-swatch').forEach((el) => {
+    el.classList.toggle('active', el.dataset.themeId === themeId);
+  });
+}
+
+function renderThemePicker() {
+  themeSwatchesEl.innerHTML = '';
+  const activeThemeId = document.documentElement.dataset.theme || 'cyan';
+  for (const theme of THEMES) {
+    const btn = document.createElement('button');
+    btn.className = `theme-swatch${theme.id === activeThemeId ? ' active' : ''}`;
+    btn.dataset.themeId = theme.id;
+    btn.style.setProperty('--swatch-accent', theme.swatchColor);
+    btn.innerHTML = `<span class="theme-swatch-dot"></span> ${t(`theme.${theme.id}`)}`;
+    btn.addEventListener('click', () => applyTheme(theme.id));
+    themeSwatchesEl.appendChild(btn);
+  }
 }
 
 // ---------------- icons + static i18n ----------------
@@ -121,6 +167,7 @@ document.getElementById('btn-lang').addEventListener('click', () => {
   } else {
     renderCards();
   }
+  renderThemePicker();
 });
 
 // ---------------- sidebar / cards ----------------
@@ -495,6 +542,7 @@ function showView(category) {
   viewConnect.classList.toggle('hidden', !isConnect);
   viewApps.classList.toggle('hidden', !isApps);
   viewTools.classList.toggle('hidden', isHome || isConnect || isApps);
+  themePanel.classList.toggle('hidden', category !== 'settings');
   if (isHome) {
     loadHealthCheck();
     updateSysmonStats();
@@ -1439,8 +1487,14 @@ function buildRingTicks() {
 }
 
 // ---------------- init ----------------
+try {
+  applyTheme(localStorage.getItem(THEME_STORAGE_KEY) || 'cyan', { save: false });
+} catch {
+  // localStorage unavailable — falls back to the default cyan theme for this session
+}
 mountIcons();
 applyStaticI18n();
+renderThemePicker();
 positionNavIndicator(navList.querySelector('.nav-item.active'));
 buildRingTicks();
 initHudChrome();
