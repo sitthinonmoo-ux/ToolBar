@@ -92,10 +92,18 @@ async function launchServer(server) {
     }
     const args = splitArgs(server.launchArgs, server.address);
     try {
-      const child = spawn(launcherPath, args, {
+      // FiveM.exe (a very common thing to point launcherPath at, since it's the
+      // documented way to script "+connect ip:port") refuses to run when started as a
+      // bare child process — "This application should be launched directly from the
+      // shell or a web browser." A plain spawn() IS exactly that bare-child-process
+      // case. Routing through `cmd /c start` invokes the same ShellExecute path a
+      // double-click would, while still letting us pass launch arguments (which
+      // shell.openPath can't — it takes no args at all).
+      const child = spawn('cmd.exe', ['/c', 'start', '""', launcherPath, ...args], {
         cwd: path.dirname(launcherPath),
         detached: true,
         stdio: 'ignore',
+        windowsHide: true,
       });
       child.unref();
     } catch (err) {
