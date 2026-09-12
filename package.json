@@ -6,7 +6,10 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "predist": "npm run clean",
     "dist": "electron-builder",
+    "prerelease": "npm run clean",
     "release": "electron-builder --publish always"
   },
   "author": "sitthinonmoo",
