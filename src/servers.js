@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
+const { detectFiveMAppDir } = require('./fivem');
 
 function serversFile(app) {
   return path.join(app.getPath('userData'), 'servers.json');
@@ -72,6 +73,19 @@ function buildConnectUri(rawAddress) {
   return `fivem://connect/${stripped}`;
 }
 
+// FiveM's own installer creates "FiveM.exe" (the Squirrel-based launcher/updater) as a
+// sibling of the "FiveM.app" data folder, e.g. "F:\Fivem\FiveM.exe" next to
+// "F:\Fivem\FiveM.app\". Finding it directly lets us launch a fivem:// connect URI
+// ourselves instead of depending on Windows having a correctly registered protocol
+// handler for it — a registration that can end up broken (missing shell\open\command)
+// from an install that got interrupted, with no in-app way to detect or repair it.
+async function findFiveMExe() {
+  const fivemAppDir = await detectFiveMAppDir({ allowScan: false });
+  if (!fivemAppDir) return null;
+  const candidate = path.join(path.dirname(fivemAppDir), 'FiveM.exe');
+  return fs.existsSync(candidate) ? candidate : null;
+}
+
 function splitArgs(argsString, address) {
   if (!argsString) return [];
   return argsString
@@ -112,15 +126,16 @@ async function launchServer(server) {
   }
 
   const uri = buildConnectUri(server.address);
-  // shell.openExternal looks like it should be identical to clicking a fivem:// link
-  // in a real browser, but Electron's child process for it can stay attached to this
-  // app's own Windows job object — FiveM's Squirrel-based launcher checks for exactly
-  // that kind of attachment and refuses with "This application should be launched
-  // directly from the shell or a web browser" even though openExternal "worked".
-  // `cmd /c start` spawns a genuinely detached shell process the same way a taskbar
-  // shortcut or Win+R would, which is what actually satisfies that check.
+  // Prefer launching FiveM.exe directly with the connect URI as its argument — the
+  // exact same command Windows would run via the registered protocol handler, minus
+  // depending on that registration actually being intact (see findFiveMExe above).
+  // Only fall back to asking Windows to resolve fivem:// itself when FiveM.exe can't
+  // be found this way (e.g. an install layout this doesn't account for).
+  const fivemExe = await findFiveMExe();
+  const target = fivemExe || uri;
+  const targetArgs = fivemExe ? [uri] : [];
   try {
-    const child = spawn('cmd.exe', ['/c', 'start', '""', uri], {
+    const child = spawn('cmd.exe', ['/c', 'start', '""', target, ...targetArgs], {
       detached: true,
       stdio: 'ignore',
       windowsHide: true,
