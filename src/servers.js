@@ -35,10 +35,6 @@ function upsertServer(app, server) {
     launcherPath: server.launcherPath || '',
     launchArgs: server.launchArgs || '',
     logo: server.logo || '',
-    autoClickEnabled: !!server.autoClickEnabled,
-    autoClickDelayMs: Number(server.autoClickDelayMs) || 3000,
-    autoClickX: Number.isFinite(server.autoClickX) ? server.autoClickX : null,
-    autoClickY: Number.isFinite(server.autoClickY) ? server.autoClickY : null,
   };
   const idx = list.findIndex((s) => s.id === clean.id);
   if (idx >= 0) list[idx] = clean;
@@ -104,14 +100,6 @@ async function launchServer(server) {
       child.unref();
     } catch (err) {
       return { success: false, message: `เปิดรันเชอร์ไม่สำเร็จ: ${err.message}` };
-    }
-
-    if (server.autoClickEnabled && Number.isFinite(server.autoClickX) && Number.isFinite(server.autoClickY)) {
-      const { replayClick } = require('./autoclick');
-      // Fire-and-forget: the click happens after the launcher has had time to render,
-      // well past when this handler already returned success to the renderer.
-      replayClick(server.autoClickX, server.autoClickY, server.autoClickDelayMs).catch(() => {});
-      return { success: true, message: `กำลังเปิดรันเชอร์ของ ${server.name}... จะกด Play ให้อัตโนมัติใน ${Math.round((server.autoClickDelayMs || 3000) / 1000)} วิ` };
     }
     return { success: true, message: `กำลังเปิดรันเชอร์ของ ${server.name}...` };
   }

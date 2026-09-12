@@ -576,9 +576,6 @@ input, textarea, select { cursor: auto !important; }
 }
 .logo-preview img { width: 100%; height: 100%; object-fit: cover; }
 
-.autoclick-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-.autoclick-delay-field { margin-top: 10px; }
-
 .backup-item {
   background: var(--card-bg-alt); border: 1px solid var(--card-border); padding: 12px;
   display: flex; flex-direction: column; gap: 6px; transition: border-color .15s;

@@ -1,7 +1,7 @@
 {
   "name": "toolbar",
   "productName": "ToolBar",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Game utility toolbox — ReShade installer, FiveM maintenance, and more via a plugin/card system.",
   "main": "main.js",
   "scripts": {
@@ -19,7 +19,6 @@
     "url": "https://github.com/sitthinonmoo-ux/toolbar.git"
   },
   "dependencies": {
-    "@nut-tree-fork/nut-js": "^4.2.6",
     "electron-updater": "^6.8.9",
     "extract-zip": "^2.0.1"
   },
@@ -39,9 +38,6 @@
       "plugins/**/*",
       "presets/**/*",
       "package.json"
-    ],
-    "asarUnpack": [
-      "node_modules/@nut-tree-fork/**/*"
     ],
     "directories": {
       "output": "dist"

@@ -915,12 +915,7 @@ const serverLauncherField = document.getElementById('server-launcher-field');
 const serverLauncherPathInput = document.getElementById('server-launcher-path');
 const serverArgsField = document.getElementById('server-args-field');
 const serverArgsInput = document.getElementById('server-args');
-const serverAutoclickField = document.getElementById('server-autoclick-field');
-const serverAutoclickEnabled = document.getElementById('server-autoclick-enabled');
-const serverAutoclickDelay = document.getElementById('server-autoclick-delay');
-const serverAutoclickStatus = document.getElementById('server-autoclick-status');
 const serverLogoPreview = document.getElementById('server-logo-preview');
-let currentAutoClickPoint = null;
 const btnDeleteServer = document.getElementById('btn-delete-server');
 const btnSaveServer = document.getElementById('btn-save-server');
 
@@ -1039,13 +1034,6 @@ function updateModeFieldsVisibility() {
   const isLauncher = serverModeSelect.value === 'customLauncher';
   serverLauncherField.classList.toggle('hidden', !isLauncher);
   serverArgsField.classList.toggle('hidden', !isLauncher);
-  serverAutoclickField.classList.toggle('hidden', !isLauncher);
-}
-
-function renderAutoClickStatus() {
-  serverAutoclickStatus.textContent = currentAutoClickPoint
-    ? t('connect.form.captureClickDone', currentAutoClickPoint.x, currentAutoClickPoint.y)
-    : '';
 }
 
 function openServerModal(server) {
@@ -1057,13 +1045,6 @@ function openServerModal(server) {
   serverAddressInput.value = server ? server.address : '';
   serverLauncherPathInput.value = server ? server.launcherPath || '' : '';
   serverArgsInput.value = server ? server.launchArgs || '' : '';
-  serverAutoclickEnabled.checked = server ? !!server.autoClickEnabled : false;
-  serverAutoclickDelay.value = server && server.autoClickDelayMs ? server.autoClickDelayMs : 3000;
-  currentAutoClickPoint =
-    server && Number.isFinite(server.autoClickX) && Number.isFinite(server.autoClickY)
-      ? { x: server.autoClickX, y: server.autoClickY }
-      : null;
-  renderAutoClickStatus();
   btnDeleteServer.classList.toggle('hidden', !server);
   renderLogoPreview();
   updateModeFieldsVisibility();
@@ -1175,37 +1156,6 @@ document.getElementById('server-lookup').addEventListener('click', async () => {
   }
 });
 
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-document.getElementById('server-autoclick-capture').addEventListener('click', async (e) => {
-  const btn = e.currentTarget;
-  const original = btn.textContent;
-  btn.disabled = true;
-  // Hide our own window so it's not in the way while the user moves the mouse over
-  // the launcher — we sample wherever the cursor ends up, no click needed here.
-  window.toolbarApi.minimize();
-  try {
-    for (let sec = 3; sec >= 1; sec--) {
-      serverAutoclickStatus.textContent = `${t('connect.form.captureClickWaiting')} ${sec}`;
-      await wait(1000);
-    }
-    const result = await window.toolbarApi.sampleCursorPosition();
-    if (result.success) {
-      currentAutoClickPoint = { x: result.x, y: result.y };
-    } else {
-      toast(result.message, 'error');
-    }
-  } catch (err) {
-    toast(err.message, 'error');
-  } finally {
-    renderAutoClickStatus();
-    btn.disabled = false;
-    btn.textContent = original;
-  }
-});
-
 btnSaveServer.addEventListener('click', async () => {
   const name = serverNameInput.value.trim();
   if (!name) {
@@ -1217,10 +1167,6 @@ btnSaveServer.addEventListener('click', async () => {
     toast(t('connect.errors.launcher'), 'error');
     return;
   }
-  if (mode === 'customLauncher' && serverAutoclickEnabled.checked && !currentAutoClickPoint) {
-    toast(t('connect.errors.autoClickPosition'), 'error');
-    return;
-  }
   const server = {
     id: editingServerId,
     name,
@@ -1229,10 +1175,6 @@ btnSaveServer.addEventListener('click', async () => {
     launcherPath: serverLauncherPathInput.value.trim(),
     launchArgs: serverArgsInput.value.trim(),
     logo: currentLogo,
-    autoClickEnabled: mode === 'customLauncher' && serverAutoclickEnabled.checked,
-    autoClickDelayMs: Number(serverAutoclickDelay.value) || 3000,
-    autoClickX: currentAutoClickPoint ? currentAutoClickPoint.x : null,
-    autoClickY: currentAutoClickPoint ? currentAutoClickPoint.y : null,
   };
   const result = await window.toolbarApi.saveServer(server);
   if (result.success) {

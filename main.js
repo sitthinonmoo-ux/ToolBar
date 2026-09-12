@@ -6,7 +6,6 @@ const { listBackups, restoreBackup } = require('./src/backup');
 const { runHealthCheck } = require('./src/healthcheck');
 const { listServers, upsertServer, deleteServer, reorderServers, launchServer, readImageAsDataUri } = require('./src/servers');
 const { fetchServerStatus } = require('./src/serverStatus');
-const { sampleCursorPosition } = require('./src/autoclick');
 const { exportSettings, importSettings } = require('./src/exportImport');
 const { APP_CATALOG } = require('./src/appCatalog');
 const { checkInstalledAll, installApp } = require('./src/appInstaller');
@@ -283,15 +282,6 @@ ipcMain.handle('servers:reorder', (_event, orderedIds) => {
 ipcMain.handle('servers:launch', (_event, server) => launchServer(server));
 
 ipcMain.handle('servers:status', (_event, address) => fetchServerStatus(address));
-
-ipcMain.handle('automation:sample-cursor', async () => {
-  try {
-    const point = await sampleCursorPosition();
-    return { success: true, x: point.x, y: point.y };
-  } catch (err) {
-    return { success: false, message: err.message };
-  }
-});
 
 ipcMain.handle('dialog:pick-image', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {

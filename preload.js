@@ -32,7 +32,6 @@ contextBridge.exposeInMainWorld('toolbarApi', {
   launchServer: (server) => ipcRenderer.invoke('servers:launch', server),
   serverStatus: (address) => ipcRenderer.invoke('servers:status', address),
   pickImage: () => ipcRenderer.invoke('dialog:pick-image'),
-  sampleCursorPosition: () => ipcRenderer.invoke('automation:sample-cursor'),
   onUpdateStatus: (callback) => {
     const handler = (_event, status) => callback(status);
     ipcRenderer.on('updater:status', handler);
