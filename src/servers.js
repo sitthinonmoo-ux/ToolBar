@@ -2,7 +2,20 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
-const { detectFiveMAppDir } = require('./fivem');
+const { detectFiveMAppDir, isFiveMRunning } = require('./fivem');
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function spawnViaStart(target, args = []) {
+  const child = spawn('cmd.exe', ['/c', 'start', '""', target, ...args], {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+  child.unref();
+}
 
 function serversFile(app) {
   return path.join(app.getPath('userData'), 'servers.json');
@@ -112,13 +125,7 @@ async function launchServer(server) {
       // case. Routing through `cmd /c start` invokes the same ShellExecute path a
       // double-click would, while still letting us pass launch arguments (which
       // shell.openPath can't — it takes no args at all).
-      const child = spawn('cmd.exe', ['/c', 'start', '""', launcherPath, ...args], {
-        cwd: path.dirname(launcherPath),
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true,
-      });
-      child.unref();
+      spawnViaStart(launcherPath, args);
     } catch (err) {
       return { success: false, message: `เปิดรันเชอร์ไม่สำเร็จ: ${err.message}` };
     }
@@ -126,25 +133,40 @@ async function launchServer(server) {
   }
 
   const uri = buildConnectUri(server.address);
-  // Prefer launching FiveM.exe directly with the connect URI as its argument — the
-  // exact same command Windows would run via the registered protocol handler, minus
-  // depending on that registration actually being intact (see findFiveMExe above).
-  // Only fall back to asking Windows to resolve fivem:// itself when FiveM.exe can't
-  // be found this way (e.g. an install layout this doesn't account for).
   const fivemExe = await findFiveMExe();
-  const target = fivemExe || uri;
-  const targetArgs = fivemExe ? [uri] : [];
+  if (!fivemExe) {
+    // Fall back to asking Windows to resolve fivem:// itself when FiveM.exe can't be
+    // found this way (e.g. an install layout this doesn't account for).
+    try {
+      spawnViaStart(uri);
+    } catch (err) {
+      return { success: false, message: `เชื่อมต่อไม่สำเร็จ: ${err.message}` };
+    }
+    return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
+  }
+
+  // Cold-launching FiveM.exe with the connect URI as its very first argument makes it
+  // run its own startup platform-detection (Steam/Epic/Rockstar Games Launcher) before
+  // it has an established session — on a machine with more than one GTA V platform
+  // linked, that detection can pick a broken/unlicensed one (seen here: it chose
+  // Rockstar Games Launcher, whose manifest download failed, crashing with a generic
+  // "should be launched from the shell" dialog that has nothing to do with how it was
+  // invoked). Launching plain first — same as manually opening FiveM and clicking
+  // connect from its own menu, which is confirmed to work — lets it finish that
+  // detection normally; only send the connect URI as a followup once it's had time to
+  // settle, or immediately if it's already running (no cold-boot detection to race).
   try {
-    const child = spawn('cmd.exe', ['/c', 'start', '""', target, ...targetArgs], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-    child.unref();
+    const running = await isFiveMRunning();
+    if (running) {
+      spawnViaStart(fivemExe, [uri]);
+      return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
+    }
+    spawnViaStart(fivemExe);
+    sleep(8000).then(() => spawnViaStart(fivemExe, [uri]));
+    return { success: true, message: `กำลังเปิด FiveM แล้วเชื่อมต่อ ${server.name} ให้อัตโนมัติใน 8 วิ...` };
   } catch (err) {
     return { success: false, message: `เชื่อมต่อไม่สำเร็จ: ${err.message}` };
   }
-  return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
 }
 
 const IMAGE_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
