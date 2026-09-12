@@ -1,0 +1,35 @@
+{
+  "id": "fivem-cache-cleaner",
+  "name": { "th": "เคลียร์แคช FiveM", "en": "Clear FiveM cache" },
+  "description": {
+    "th": "ล้างแคชที่ทำให้โหลดค้าง เท็กซ์เจอร์เพี้ยน หรือเกมค้างกลางคัน ย้อนกลับได้ถ้าไม่ช่วย",
+    "en": "Clears cache causing stuck loading screens, texture glitches, or mid-game freezes — reversible if it doesn't help"
+  },
+  "icon": "tool-cache",
+  "category": "maintenance",
+  "dangerous": true,
+  "inputs": [
+    {
+      "key": "fivemAppDir",
+      "type": "folder-picker",
+      "label": { "th": "โฟลเดอร์ FiveM.app", "en": "FiveM.app folder" },
+      "detectable": true,
+      "detectLabel": { "th": "ค้นหา FiveM อัตโนมัติ", "en": "Auto-detect FiveM" },
+      "hint": {
+        "th": "ปกติอยู่ที่ %localappdata%\\FiveM\\FiveM.app ถ้าค้นหาไม่เจอ (เช่นย้ายตำแหน่งไว้ตอนติดตั้งครั้งแรก) เลือกเองได้",
+        "en": "Usually at %localappdata%\\FiveM\\FiveM.app — if auto-detect can't find it (e.g. a custom install location), browse manually"
+      }
+    },
+    {
+      "key": "folders",
+      "type": "checkbox-group",
+      "label": { "th": "โฟลเดอร์ที่จะล้าง", "en": "Folders to clear" },
+      "options": [
+        { "value": "cache", "label": { "th": "cache", "en": "cache" }, "default": true },
+        { "value": "server-cache", "label": { "th": "server-cache", "en": "server-cache" }, "default": true },
+        { "value": "server-cache-priv", "label": { "th": "server-cache-priv", "en": "server-cache-priv" }, "default": true },
+        { "value": "nui-storage", "label": { "th": "nui-storage (เสริม แก้ปัญหา UI ค้าง)", "en": "nui-storage (extra — fixes stuck UI)" }, "default": false }
+      ]
+    }
+  ]
+}

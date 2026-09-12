@@ -1,0 +1,57 @@
+{
+  "id": "reshade-installer",
+  "name": { "th": "ติดตั้ง ReShade", "en": "Install ReShade" },
+  "description": {
+    "th": "ดาวน์โหลด ReShade ล่าสุด ติดตั้งให้ GTA V แล้วย้ายเข้าโฟลเดอร์ plugins ของ FiveM ให้อัตโนมัติ (ขั้นตอน F8 ทำต่อในการ์ดถัดไป)",
+    "en": "Downloads the latest ReShade, installs it against GTA V, and auto-moves it into FiveM's plugins folder (the F8 step continues in the next card)"
+  },
+  "icon": "tool-reshade",
+  "category": "graphics",
+  "dangerous": false,
+  "inputs": [
+    {
+      "key": "gameExe",
+      "type": "file-picker",
+      "label": { "th": "ไฟล์ GTA5.exe", "en": "GTA5.exe file" },
+      "filters": [{ "name": "Executable", "extensions": ["exe"] }],
+      "detectable": true,
+      "detectLabel": { "th": "ค้นหา GTA V อัตโนมัติ", "en": "Auto-detect GTA V" },
+      "hint": {
+        "th": "ต้องเลือก GTA5.exe ตัวจริงจากโฟลเดอร์ Rockstar/Steam/Epic (ไม่ใช่ไฟล์ในโฟลเดอร์ FiveM) — ReShade ใช้ไฟล์นี้แค่สร้างไฟล์ที่ต้องใช้ แล้วเราจะย้ายเข้า FiveM ให้เอง",
+        "en": "Pick the real GTA5.exe from your Rockstar/Steam/Epic folder (not a file inside FiveM) — ReShade only uses it to generate the files, which we then move into FiveM for you"
+      }
+    },
+    {
+      "key": "api",
+      "type": "select",
+      "label": { "th": "Rendering API", "en": "Rendering API" },
+      "default": "dxgi",
+      "options": [
+        { "value": "dxgi", "label": { "th": "DirectX 10/11/12 — แนะนำสำหรับ GTA V / FiveM", "en": "DirectX 10/11/12 — recommended for GTA V / FiveM" } },
+        { "value": "d3d9", "label": { "th": "DirectX 9", "en": "DirectX 9" } },
+        { "value": "opengl", "label": { "th": "OpenGL", "en": "OpenGL" } },
+        { "value": "vulkan", "label": { "th": "Vulkan", "en": "Vulkan" } }
+      ]
+    },
+    {
+      "key": "forFiveM",
+      "type": "checkbox",
+      "label": {
+        "th": "ติดตั้งสำหรับ FiveM (ย้ายไฟล์เข้าโฟลเดอร์ plugins ให้อัตโนมัติ)",
+        "en": "Install for FiveM (auto-move files into the plugins folder)"
+      },
+      "default": true
+    },
+    {
+      "key": "fivemAppDir",
+      "type": "folder-picker",
+      "label": { "th": "โฟลเดอร์ FiveM.app", "en": "FiveM.app folder" },
+      "detectable": true,
+      "detectLabel": { "th": "ค้นหา FiveM อัตโนมัติ", "en": "Auto-detect FiveM" },
+      "hint": {
+        "th": "ปกติอยู่ที่ %localappdata%\\FiveM\\FiveM.app แต่ถ้าคุณเคยย้าย FiveM.exe ไปรันจากโฟลเดอร์อื่นตอนติดตั้งครั้งแรก ตำแหน่งจริงจะอยู่ที่นั่นแทน — เลือกเองได้ถ้าค้นหาอัตโนมัติไม่เจอ",
+        "en": "Usually at %localappdata%\\FiveM\\FiveM.app, but if you ran FiveM.exe from a custom folder on first install, it lives there instead — browse manually if auto-detect can't find it"
+      }
+    }
+  ]
+}

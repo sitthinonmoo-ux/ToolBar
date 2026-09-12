@@ -1,0 +1,24 @@
+{
+  "id": "reshade-plugins-restore",
+  "name": { "th": "วางไฟล์ ReShade plugins ทับ", "en": "Restore ReShade plugins folder" },
+  "description": {
+    "th": "ดาวน์โหลดชุด ReShade plugins ที่เตรียมไว้ (dxgi.dll, ReShade.ini, reshade-shaders, QuantV ฯลฯ) จาก GitHub แล้วคัดลอกทับโฟลเดอร์ plugins ของ FiveM ทั้งก้อนให้อัตโนมัติ — กดปุ่มเดียวจบ ไม่ต้องหาไฟล์เอง (สำรองของเดิมไว้ให้อัตโนมัติก่อนทับ)",
+    "en": "Downloads the prepared ReShade plugins pack (dxgi.dll, ReShade.ini, reshade-shaders, QuantV, etc.) from GitHub and copies it straight over FiveM's plugins folder — one click, no manual file picking (whatever's already there is backed up first)"
+  },
+  "icon": "tool-reshade",
+  "category": "graphics",
+  "dangerous": true,
+  "inputs": [
+    {
+      "key": "fivemAppDir",
+      "type": "folder-picker",
+      "label": { "th": "โฟลเดอร์ FiveM.app", "en": "FiveM.app folder" },
+      "detectable": true,
+      "detectLabel": { "th": "ค้นหา FiveM อัตโนมัติ", "en": "Auto-detect FiveM" },
+      "hint": {
+        "th": "ปกติอยู่ที่ %localappdata%\\FiveM\\FiveM.app ถ้าค้นหาไม่เจอ เลือกเองได้",
+        "en": "Usually at %localappdata%\\FiveM\\FiveM.app — browse manually if auto-detect can't find it"
+      }
+    }
+  ]
+}

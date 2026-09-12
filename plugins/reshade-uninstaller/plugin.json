@@ -1,0 +1,36 @@
+{
+  "id": "reshade-uninstaller",
+  "name": { "th": "ถอน ReShade ออก", "en": "Uninstall ReShade" },
+  "description": {
+    "th": "ลบไฟล์ ReShade ออกจากโฟลเดอร์ plugins ของ FiveM และเอาบรรทัดยืนยันออกจาก CitizenFX.ini — กู้คืนได้จากประวัติถ้าเปลี่ยนใจ",
+    "en": "Removes ReShade's files from FiveM's plugins folder and clears the acknowledgment line from CitizenFX.ini — reversible from history if you change your mind"
+  },
+  "icon": "tool-reshade",
+  "category": "graphics",
+  "dangerous": true,
+  "inputs": [
+    {
+      "key": "fivemAppDir",
+      "type": "folder-picker",
+      "label": { "th": "โฟลเดอร์ FiveM.app", "en": "FiveM.app folder" },
+      "detectable": true,
+      "detectLabel": { "th": "ค้นหา FiveM อัตโนมัติ", "en": "Auto-detect FiveM" },
+      "hint": {
+        "th": "ปกติอยู่ที่ %localappdata%\\FiveM\\FiveM.app ถ้าค้นหาไม่เจอ (เช่นย้ายตำแหน่งไว้ตอนติดตั้งครั้งแรก) เลือกเองได้",
+        "en": "Usually at %localappdata%\\FiveM\\FiveM.app — if auto-detect can't find it (e.g. a custom install location), browse manually"
+      }
+    },
+    {
+      "key": "gameExe",
+      "type": "file-picker",
+      "label": { "th": "ไฟล์ GTA5.exe (ไม่บังคับ)", "en": "GTA5.exe file (optional)" },
+      "filters": [{ "name": "Executable", "extensions": ["exe"] }],
+      "detectable": true,
+      "detectLabel": { "th": "ค้นหา GTA V อัตโนมัติ", "en": "Auto-detect GTA V" },
+      "hint": {
+        "th": "เว้นว่างได้ถ้าติดตั้ง ReShade แบบ FiveM ปกติ (ไฟล์ถูกย้ายเข้า plugins หมดแล้ว) — ระบุเฉพาะตอนเคยติดตั้งแบบไม่ย้ายเข้า FiveM ด้วย",
+        "en": "Leave blank if you installed the normal FiveM way (files already moved into plugins) — only set this if you also installed without moving into FiveM"
+      }
+    }
+  ]
+}

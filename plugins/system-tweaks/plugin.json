@@ -1,0 +1,130 @@
+{
+  "id": "system-tweaks",
+  "name": { "th": "ตั้งค่าเครื่องให้เหมือนเดิม", "en": "Restore my system settings" },
+  "description": {
+    "th": "ปรับค่า Windows ชุดที่ใช้อยู่ (mouse, power plan, network, game bar, GPU scheduling, CPU, input) ในคลิกเดียว — กดปุ่มนี้หลังลงวินโดวส์ใหม่แทนการตามไปตั้งเองทีละจุด หมายเหตุ: NVIDIA Low Latency Mode / Power Mode / V-Sync เก็บใน driver profile database ไม่ใช่ registry ธรรมดา แก้ผ่านสคริปต์ไม่ปลอดภัย ต้องตั้งเองใน NVIDIA App > Program Settings",
+    "en": "Applies the Windows settings you actually use (mouse, power plan, network, game bar, GPU scheduling, CPU, input) in one click — run this after a fresh Windows install instead of hunting down each setting by hand. Note: NVIDIA Low Latency Mode / Power Mode / V-Sync live in the driver's profile database, not plain registry — unsafe to script, set those yourself in NVIDIA App > Program Settings"
+  },
+  "icon": "nav-settings",
+  "category": "settings",
+  "dangerous": false,
+  "inputs": [
+    {
+      "key": "tweaks",
+      "type": "checkbox-group",
+      "label": { "th": "รายการที่จะปรับ", "en": "Settings to apply" },
+      "options": [
+        {
+          "value": "mousePrecision",
+          "label": { "th": "ปิด Enhance Pointer Precision (mouse acceleration)", "en": "Disable Enhance Pointer Precision (mouse acceleration)" },
+          "default": true
+        },
+        {
+          "value": "powerUltimate",
+          "label": { "th": "สลับเป็นแผนพลังงาน Ultimate Performance", "en": "Switch to Ultimate Performance power plan" },
+          "default": true
+        },
+        {
+          "value": "networkThrottling",
+          "label": { "th": "ปิด Network Throttling Index", "en": "Disable Network Throttling Index" },
+          "default": true
+        },
+        {
+          "value": "gameDvrOff",
+          "label": { "th": "ปิด Xbox Game Bar / Game DVR", "en": "Disable Xbox Game Bar / Game DVR" },
+          "default": true
+        },
+        {
+          "value": "hwGpuScheduling",
+          "label": { "th": "เปิด Hardware-accelerated GPU Scheduling (ต้อง restart)", "en": "Enable Hardware-accelerated GPU Scheduling (needs a restart)" },
+          "default": true
+        },
+        {
+          "value": "fivemHighPriority",
+          "label": { "th": "ตั้ง High Priority ถาวรให้โปรเซส FiveM/GTA", "en": "Set permanent High Priority for FiveM/GTA processes" },
+          "default": false
+        },
+        {
+          "value": "filterKeysBounceFix",
+          "label": { "th": "แก้ Keyboard Bounce/Wait delay (กันคีย์หายตอนกดรัวๆ)", "en": "Fix keyboard bounce/wait delay (prevents dropped keys on rapid taps)" },
+          "default": false
+        },
+        {
+          "value": "tcpCongestionCtcp",
+          "label": { "th": "ตั้ง TCP Congestion Provider เป็น CTCP ทุก template", "en": "Set TCP Congestion Provider to CTCP for all templates" },
+          "default": false
+        },
+        {
+          "value": "dnsCloudflare",
+          "label": { "th": "เปลี่ยน DNS เป็น Cloudflare (1.1.1.1 / 1.0.0.1)", "en": "Switch DNS to Cloudflare (1.1.1.1 / 1.0.0.1)" },
+          "default": false
+        },
+        {
+          "value": "hpetDisable",
+          "label": { "th": "ปิด HPET / Dynamic Tick (ลด timer latency)", "en": "Disable HPET / Dynamic Tick (lowers timer latency)" },
+          "default": false
+        },
+        {
+          "value": "cpuCoreParkingOff",
+          "label": { "th": "ปิด CPU Core Parking + Throttle ขั้นต่ำ/สูงสุด = 100%", "en": "Disable CPU core parking + throttle min/max = 100%" },
+          "default": false
+        },
+        {
+          "value": "win32PrioritySeparation",
+          "label": { "th": "ตั้ง Win32PrioritySeparation = 26 (โปรไฟล์เกม)", "en": "Set Win32PrioritySeparation = 26 (gaming profile)" },
+          "default": false
+        },
+        {
+          "value": "disablePagingExecutive",
+          "label": { "th": "ปิด Paging Executive (ห้าม kernel paging ลง disk)", "en": "Disable Paging Executive" },
+          "default": false
+        },
+        {
+          "value": "disableBackgroundServices",
+          "label": { "th": "ปิด Background Services (SysMain, WSearch, DiagTrack)", "en": "Disable background services (SysMain, WSearch, DiagTrack)" },
+          "default": false
+        },
+        {
+          "value": "tcpAdvancedTuning",
+          "label": { "th": "TCP/UDP ขั้นสูง (RSS/RSC/ECN/timestamps/fastopen/hystart + ACK ไม่หน่วง)", "en": "Advanced TCP/UDP tuning + instant ACK" },
+          "default": false
+        },
+        {
+          "value": "qosBitsDelivery",
+          "label": { "th": "QoS ให้ FiveM/GTA5 + ปิด BITS/Delivery Optimization", "en": "QoS for FiveM/GTA5 + disable BITS/Delivery Optimization" },
+          "default": false
+        },
+        {
+          "value": "inputBufferSize",
+          "label": { "th": "ลด Mouse/Keyboard Driver Buffer Size", "en": "Reduce mouse/keyboard driver buffer size" },
+          "default": false
+        },
+        {
+          "value": "disableAccessibilityShortcuts",
+          "label": { "th": "ปิดทางลัดเปิด Sticky/Toggle Keys", "en": "Disable Sticky/Toggle Keys shortcuts" },
+          "default": false
+        },
+        {
+          "value": "keyboardSpeedMax",
+          "label": { "th": "ตั้ง Keyboard Delay ต่ำสุด / Speed สูงสุด", "en": "Keyboard delay to minimum / speed to maximum" },
+          "default": false
+        },
+        {
+          "value": "usbSelectiveSuspendOff",
+          "label": { "th": "ปิด USB Selective Suspend", "en": "Disable USB Selective Suspend" },
+          "default": false
+        },
+        {
+          "value": "memoryCompressionOff",
+          "label": { "th": "ปิด Memory Compression", "en": "Disable Memory Compression" },
+          "default": false
+        },
+        {
+          "value": "mouseRawCurve",
+          "label": { "th": "ตั้ง Mouse Curve เป็น Raw 1:1 (custom curve)", "en": "Set mouse curve to raw 1:1 (custom curve)" },
+          "default": false
+        }
+      ]
+    }
+  ]
+}
