@@ -2,6 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn } = require('child_process');
+const { shell } = require('electron');
 const { APP_CATALOG } = require('./appCatalog');
 
 async function fetchWithTimeout(url, ms = 60000) {
@@ -17,24 +18,28 @@ async function fetchWithTimeout(url, ms = 60000) {
 
 // Downloads a vendor's own installer and opens it — used instead of winget for a
 // catalog entry that sets `directUrl` (see appCatalog.js's fivem entry for why: a
-// stale hash in winget's community manifest, not something fixable from here). Run
-// without a silent flag since we can't assume the installer supports one; the user
-// finishes whatever short wizard it shows, same as reshade-installer's GUI fallback.
+// stale hash in winget's community manifest, not something fixable from here).
+//
+// Opened via shell.openPath (the same mechanism as double-clicking the file in
+// Explorer), NOT child_process.spawn. FiveM.exe doubles as both installer and game
+// client, and it actively refuses to run when it detects it was launched as a bare
+// child process — "This application should be launched directly from the shell or a
+// web browser." spawn() is exactly that bare-child-process case; shell.openPath goes
+// through the OS shell (ShellExecute on Windows), which is what satisfies the check.
 async function installDirect(app) {
   const res = await fetchWithTimeout(app.directUrl, 60000);
   if (!res.ok) throw new Error(`ดาวน์โหลดตัวติดตั้ง ${app.name} ไม่สำเร็จ (HTTP ${res.status})`);
   const buf = Buffer.from(await res.arrayBuffer());
   const tempPath = path.join(os.tmpdir(), `${app.id}-installer-${Date.now()}.exe`);
   fs.writeFileSync(tempPath, buf);
-  return new Promise((resolve) => {
-    const child = spawn(tempPath, [], { detached: true, stdio: 'ignore' });
-    child.on('error', (err) => resolve({ success: false, message: `เปิดตัวติดตั้ง ${app.name} ไม่สำเร็จ: ${err.message}` }));
-    child.unref();
-    resolve({
-      success: true,
-      message: `ดาวน์โหลดตัวติดตั้ง ${app.name} เสร็จแล้ว — ทำตามขั้นตอนในหน้าต่างที่เปิดขึ้นมาให้จบการติดตั้ง`,
-    });
-  });
+  const openError = await shell.openPath(tempPath);
+  if (openError) {
+    return { success: false, message: `เปิดตัวติดตั้ง ${app.name} ไม่สำเร็จ: ${openError}` };
+  }
+  return {
+    success: true,
+    message: `ดาวน์โหลดตัวติดตั้ง ${app.name} เสร็จแล้ว — ทำตามขั้นตอนในหน้าต่างที่เปิดขึ้นมาให้จบการติดตั้ง`,
+  };
 }
 
 function runWinget(args) {
