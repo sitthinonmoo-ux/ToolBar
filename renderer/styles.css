@@ -87,7 +87,7 @@ html, body, body * { cursor: none !important; }
 input, textarea, select { cursor: auto !important; }
 .reticle {
   position: fixed; left: 0; top: 0; width: 22px; height: 22px; border: 1px solid var(--accent-2);
-  border-radius: 50%; pointer-events: none; z-index: 90; transform: translate(-50%, -50%);
+  border-radius: 50%; pointer-events: none; z-index: 200; transform: translate(-50%, -50%);
   opacity: 0; transition: opacity .2s, width .15s, height .15s, border-color .15s;
   box-shadow: 0 0 10px rgba(47, 227, 255, .5);
 }
@@ -98,7 +98,7 @@ input, textarea, select { cursor: auto !important; }
 .reticle.hot { width: 14px; height: 14px; border-color: #fff; }
 .reticle-dot {
   position: fixed; left: 0; top: 0; width: 3px; height: 3px; background: var(--accent-2); border-radius: 50%;
-  pointer-events: none; z-index: 90; transform: translate(-50%, -50%); opacity: 0; transition: opacity .2s;
+  pointer-events: none; z-index: 200; transform: translate(-50%, -50%); opacity: 0; transition: opacity .2s;
   box-shadow: 0 0 6px var(--accent-2);
 }
 .reticle-dot.show { opacity: 1; }
