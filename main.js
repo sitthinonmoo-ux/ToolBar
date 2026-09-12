@@ -114,6 +114,8 @@ process.on('unhandledRejection', (reason) => {
   debugLog.log(app, `UNHANDLED REJECTION: ${reason && reason.stack ? reason.stack : reason}`);
 });
 
+ipcMain.handle('app:getVersion', () => app.getVersion());
+
 ipcMain.handle('window:minimize', () => mainWindow && mainWindow.minimize());
 ipcMain.handle('window:close', () => mainWindow && mainWindow.close());
 

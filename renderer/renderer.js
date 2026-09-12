@@ -1503,6 +1503,9 @@ loadPlugins();
 loadHealthCheck();
 loadServers({ silent: true });
 updateSysmonStats();
+window.toolbarApi.getVersion().then((v) => {
+  document.getElementById('titlebar-version').textContent = `v${v}`;
+});
 
 // Auto-update: main process pushes status as electron-updater's own events fire (see
 // src/autoUpdate.js) — 'checking'/'not-available' are deliberately silent (nothing

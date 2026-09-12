@@ -140,6 +140,7 @@ input, textarea, select { cursor: auto !important; }
 .titlebar-logo { display: flex; filter: drop-shadow(0 0 5px rgba(47, 227, 255, .45)); animation: corepulse 2.6s ease-in-out infinite; }
 @keyframes corepulse { 0%, 100% { filter: drop-shadow(0 0 3px rgba(47, 227, 255, .3)); } 50% { filter: drop-shadow(0 0 8px rgba(47, 227, 255, .7)); } }
 .titlebar-title { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-secondary); }
+.titlebar-version { font-size: 10px; color: var(--text-dim); }
 .titlebar-controls { display: flex; align-items: center; gap: 4px; -webkit-app-region: no-drag; }
 .titlebar-pill {
   border: 1px solid var(--card-border); background: transparent; color: var(--text-secondary);

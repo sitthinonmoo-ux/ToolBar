@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('toolbarApi', {
+  getVersion: () => ipcRenderer.invoke('app:getVersion'),
   minimize: () => ipcRenderer.invoke('window:minimize'),
   close: () => ipcRenderer.invoke('window:close'),
   listPlugins: () => ipcRenderer.invoke('plugins:list'),
