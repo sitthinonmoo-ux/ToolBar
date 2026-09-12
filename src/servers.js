@@ -2,7 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
-const { shell } = require('electron');
 
 function serversFile(app) {
   return path.join(app.getPath('userData'), 'servers.json');
@@ -113,7 +112,23 @@ async function launchServer(server) {
   }
 
   const uri = buildConnectUri(server.address);
-  shell.openExternal(uri);
+  // shell.openExternal looks like it should be identical to clicking a fivem:// link
+  // in a real browser, but Electron's child process for it can stay attached to this
+  // app's own Windows job object — FiveM's Squirrel-based launcher checks for exactly
+  // that kind of attachment and refuses with "This application should be launched
+  // directly from the shell or a web browser" even though openExternal "worked".
+  // `cmd /c start` spawns a genuinely detached shell process the same way a taskbar
+  // shortcut or Win+R would, which is what actually satisfies that check.
+  try {
+    const child = spawn('cmd.exe', ['/c', 'start', '""', uri], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    child.unref();
+  } catch (err) {
+    return { success: false, message: `เชื่อมต่อไม่สำเร็จ: ${err.message}` };
+  }
   return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
 }
 
