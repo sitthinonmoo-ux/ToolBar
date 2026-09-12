@@ -28,21 +28,28 @@
   --notch: 10px;
 }
 
-/* Theme picker: only the accent hues swap per theme — background/card/text tones stay
-   put, so switching themes never risks a low-contrast or broken-looking combination. */
+/* Theme picker: background/card tones get a matching hue tint per theme (not just the
+   accent) so switching actually reads as a different theme, not just a different
+   highlight color — text stays neutral light/gray across all of them since the
+   backgrounds are all still dark enough to keep that readable regardless of tint. */
 [data-theme="violet"] {
+  --bg: #0a0612; --bg-elevated: #120a1e; --card-bg: #180f2a; --card-bg-alt: #1e1436; --card-border: #2c1f48;
   --accent-1: #8b5cf6; --accent-2: #c084fc; --accent-soft: #241636; --card-border-hover: #c084fc;
 }
 [data-theme="magenta"] {
+  --bg: #0c0509; --bg-elevated: #170a10; --card-bg: #200e17; --card-bg-alt: #2a121e; --card-border: #3d1a2c;
   --accent-1: #ec4899; --accent-2: #ff6ec7; --accent-soft: #2c1224; --card-border-hover: #ff6ec7;
 }
 [data-theme="amber"] {
+  --bg: #0c0a04; --bg-elevated: #191308; --card-bg: #221a0a; --card-bg-alt: #2c210d; --card-border: #3d2f12;
   --accent-1: #f59e0b; --accent-2: #ffd166; --accent-soft: #2c2109; --card-border-hover: #ffd166;
 }
 [data-theme="emerald"] {
+  --bg: #050c09; --bg-elevated: #081810; --card-bg: #0c2016; --card-bg-alt: #0f2a1c; --card-border: #163d29;
   --accent-1: #10b981; --accent-2: #34f5b0; --accent-soft: #0a2a1f; --card-border-hover: #34f5b0;
 }
 [data-theme="crimson"] {
+  --bg: #0c0505; --bg-elevated: #180909; --card-bg: #220c0c; --card-bg-alt: #2c0f0f; --card-border: #3d1515;
   --accent-1: #ef4444; --accent-2: #ff7a7a; --accent-soft: #2c1212; --card-border-hover: #ff7a7a;
 }
 
