@@ -55,6 +55,13 @@ const APP_CATALOG = [
     id: 'fivem',
     name: 'FiveM',
     wingetId: 'Cfx.re.FiveM',
+    // winget's community-maintained manifest for this package pins a SHA256 that goes
+    // stale whenever Cfx.re updates the bootstrapper at this same URL — which is often,
+    // since it's a self-updating installer — so `winget install` reliably fails with
+    // "Installer hash does not match" until someone gets around to refreshing the
+    // manifest. directUrl lets appInstaller.js skip winget entirely for this one entry
+    // and fetch the real installer straight from the vendor instead.
+    directUrl: 'https://runtime.fivem.net/client/FiveM.exe',
     description: { th: 'ตัวเล่น GTA V Roleplay/multiplayer server', en: 'GTA V roleplay/multiplayer client' },
     iconUrl: simpleIcon('fivem'),
   },

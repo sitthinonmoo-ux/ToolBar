@@ -1,5 +1,41 @@
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { spawn } = require('child_process');
 const { APP_CATALOG } = require('./appCatalog');
+
+async function fetchWithTimeout(url, ms = 60000) {
+  try {
+    return await fetch(url, { signal: AbortSignal.timeout(ms) });
+  } catch (err) {
+    if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+      throw new Error(`เชื่อมต่อ ${new URL(url).hostname} ไม่สำเร็จภายใน ${ms / 1000} วินาที — เช็คอินเทอร์เน็ต/ไฟร์วอลล์`);
+    }
+    throw err;
+  }
+}
+
+// Downloads a vendor's own installer and opens it — used instead of winget for a
+// catalog entry that sets `directUrl` (see appCatalog.js's fivem entry for why: a
+// stale hash in winget's community manifest, not something fixable from here). Run
+// without a silent flag since we can't assume the installer supports one; the user
+// finishes whatever short wizard it shows, same as reshade-installer's GUI fallback.
+async function installDirect(app) {
+  const res = await fetchWithTimeout(app.directUrl, 60000);
+  if (!res.ok) throw new Error(`ดาวน์โหลดตัวติดตั้ง ${app.name} ไม่สำเร็จ (HTTP ${res.status})`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const tempPath = path.join(os.tmpdir(), `${app.id}-installer-${Date.now()}.exe`);
+  fs.writeFileSync(tempPath, buf);
+  return new Promise((resolve) => {
+    const child = spawn(tempPath, [], { detached: true, stdio: 'ignore' });
+    child.on('error', (err) => resolve({ success: false, message: `เปิดตัวติดตั้ง ${app.name} ไม่สำเร็จ: ${err.message}` }));
+    child.unref();
+    resolve({
+      success: true,
+      message: `ดาวน์โหลดตัวติดตั้ง ${app.name} เสร็จแล้ว — ทำตามขั้นตอนในหน้าต่างที่เปิดขึ้นมาให้จบการติดตั้ง`,
+    });
+  });
+}
 
 function runWinget(args) {
   return new Promise((resolve) => {
@@ -41,6 +77,13 @@ function tailMessage(text, max = 500) {
 async function installApp(appId) {
   const app = APP_CATALOG.find((a) => a.id === appId);
   if (!app) return { success: false, message: 'ไม่พบโปรแกรมนี้ในรายการ' };
+  if (app.directUrl) {
+    try {
+      return await installDirect(app);
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  }
   const result = await runWinget([
     'install',
     '--id',
