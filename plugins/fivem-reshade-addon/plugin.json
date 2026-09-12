@@ -1,0 +1,34 @@
+{
+  "id": "fivem-reshade-addon",
+  "name": { "th": "ยืนยัน ReShade กับ FiveM (สำรอง)", "en": "Confirm ReShade with FiveM (fallback)" },
+  "description": {
+    "th": "ปกติการ์ดติดตั้ง ReShade ทำขั้นนี้ให้อัตโนมัติแล้ว ใช้การ์ดนี้เฉพาะตอนต้องแก้ไขเอง หรืออัตโนมัติไม่ทำงาน",
+    "en": "The install card normally handles this automatically. Use this only if you need to fix it manually or auto-confirm didn't work"
+  },
+  "icon": "tool-addon",
+  "category": "graphics",
+  "dangerous": false,
+  "inputs": [
+    {
+      "key": "fivemAppDir",
+      "type": "folder-picker",
+      "label": { "th": "โฟลเดอร์ FiveM.app", "en": "FiveM.app folder" },
+      "detectable": true,
+      "detectLabel": { "th": "ค้นหา FiveM อัตโนมัติ", "en": "Auto-detect FiveM" },
+      "hint": {
+        "th": "ปกติอยู่ที่ %localappdata%\\FiveM\\FiveM.app ถ้าค้นหาไม่เจอ (เช่นย้ายตำแหน่งไว้ตอนติดตั้งครั้งแรก) เลือกเองได้",
+        "en": "Usually at %localappdata%\\FiveM\\FiveM.app — if auto-detect can't find it (e.g. a custom install location), browse manually"
+      }
+    },
+    {
+      "key": "addonId",
+      "type": "text",
+      "label": { "th": "วางข้อความจาก F8 (ไม่บังคับ)", "en": "Paste the F8 message (optional)" },
+      "placeholder": { "th": "เว้นว่างไว้ให้คำนวณอัตโนมัติ", "en": "Leave blank to compute automatically" },
+      "hint": {
+        "th": "เว้นว่างไว้ได้เลย — แอปจะคำนวณบรรทัดที่ถูกต้องจากชื่อเครื่องนี้ให้เอง วางข้อความจาก F8 เฉพาะตอนอยากยืนยันด้วยข้อความจริงหรือใช้ค่าที่คำนวณอัตโนมัติแล้วไม่ได้ผล",
+        "en": "Leave this blank — the app computes the correct line from this machine's name automatically. Only paste from F8 if you want to verify against the real message or the auto-computed value didn't work"
+      }
+    }
+  ]
+}

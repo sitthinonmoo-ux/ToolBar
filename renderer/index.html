@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://cdn.simpleicons.org; script-src 'self'" />
+<title>ToolBar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="reticle" id="reticle"></div>
+  <div class="reticle-dot" id="reticle-dot"></div>
+  <canvas class="particles" id="particles" aria-hidden="true"></canvas>
+  <div class="frame-scan" aria-hidden="true"></div>
+  <div class="ambient-scan" aria-hidden="true"></div>
+  <div class="corner tl" aria-hidden="true"><svg viewBox="0 0 22 22"><path d="M22,2 L4,2 A2,2 0 0 0 2,4 L2,22"/></svg></div>
+  <div class="corner tr" aria-hidden="true"><svg viewBox="0 0 22 22"><path d="M22,2 L4,2 A2,2 0 0 0 2,4 L2,22"/></svg></div>
+  <div class="corner bl" aria-hidden="true"><svg viewBox="0 0 22 22"><path d="M22,2 L4,2 A2,2 0 0 0 2,4 L2,22"/></svg></div>
+  <div class="corner br" aria-hidden="true"><svg viewBox="0 0 22 22"><path d="M22,2 L4,2 A2,2 0 0 0 2,4 L2,22"/></svg></div>
+
+  <div class="titlebar">
+    <div class="titlebar-drag">
+      <span class="titlebar-logo" data-icon="logo"></span>
+      <span class="titlebar-title">ToolBar</span>
+    </div>
+    <div class="titlebar-controls">
+      <button id="btn-lang" class="titlebar-pill" title="TH / EN">TH</button>
+      <button id="btn-min" class="titlebar-btn" title="ย่อหน้าต่าง">—</button>
+      <button id="btn-close" class="titlebar-btn titlebar-btn-close" title="ปิด">✕</button>
+    </div>
+  </div>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <nav class="nav-list" id="nav-list">
+        <span class="nav-indicator" id="nav-indicator"></span>
+        <button class="nav-item active" data-category="home" draggable="true">
+          <span class="drag-handle" data-icon="grip"></span>
+          <span class="nav-icon" data-icon="home"></span> <span data-i18n="nav.home"></span>
+          <span class="nav-tag mono" id="nav-tag-home"></span>
+        </button>
+        <button class="nav-item" data-category="all" draggable="true">
+          <span class="drag-handle" data-icon="grip"></span>
+          <span class="nav-icon" data-icon="nav-all"></span> <span data-i18n="nav.all"></span>
+        </button>
+        <button class="nav-item" data-category="connect" draggable="true">
+          <span class="drag-handle" data-icon="grip"></span>
+          <span class="nav-icon" data-icon="nav-connect"></span> <span data-i18n="nav.connect"></span>
+          <span class="nav-tag mono" id="nav-tag-connect"></span>
+        </button>
+        <button class="nav-item" data-category="apps" draggable="true">
+          <span class="drag-handle" data-icon="grip"></span>
+          <span class="nav-icon" data-icon="nav-apps"></span> <span data-i18n="nav.apps"></span>
+        </button>
+        <button class="nav-item" data-category="graphics" draggable="true">
+          <span class="drag-handle" data-icon="grip"></span>
+          <span class="nav-icon" data-icon="nav-graphics"></span> <span data-i18n="nav.graphics"></span>
+        </button>
+        <button class="nav-item" data-category="maintenance" draggable="true">
+          <span class="drag-handle" data-icon="grip"></span>
+          <span class="nav-icon" data-icon="nav-maintenance"></span> <span data-i18n="nav.maintenance"></span>
+        </button>
+        <button class="nav-item" data-category="settings" draggable="true">
+          <span class="drag-handle" data-icon="grip"></span>
+          <span class="nav-icon" data-icon="nav-settings"></span> <span data-i18n="nav.settings"></span>
+        </button>
+      </nav>
+      <button class="sidebar-history-btn" id="btn-history">
+        <span class="nav-icon" data-icon="history"></span> <span data-i18n="sidebar.history"></span>
+      </button>
+    </aside>
+
+    <main class="content">
+      <div class="view-dashboard" id="view-dashboard">
+        <header class="content-header">
+          <div>
+            <h1 data-i18n="dashboard.title"></h1>
+            <p class="subtitle" data-i18n="dashboard.subtitle"></p>
+          </div>
+        </header>
+        <div class="hero-panel" id="hero-panel">
+          <div class="orbital">
+            <svg viewBox="0 0 100 100">
+              <defs>
+                <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent-1)"/><stop offset="1" stop-color="var(--accent-2)"/></linearGradient>
+                <radialGradient id="sweepGrad"><stop offset="0" stop-color="var(--accent-2)" stop-opacity=".95"/><stop offset="1" stop-color="var(--accent-2)" stop-opacity="0"/></radialGradient>
+              </defs>
+              <circle class="ring-outer" cx="50" cy="50" r="47"/>
+              <circle class="ring-mid" cx="50" cy="50" r="41"/>
+              <g id="ring-ticks"></g>
+              <circle class="ring-track" cx="50" cy="50" r="34"/>
+              <circle class="ring-val" id="ring-val" cx="50" cy="50" r="34"/>
+              <g class="ring-sweep"><circle cx="50" cy="12.5" r="2.2" fill="url(#sweepGrad)"/></g>
+            </svg>
+            <div class="orbital-label"><div class="orbital-num mono" id="ring-num">0/0</div><div class="orbital-den" data-i18n="health.ready"></div></div>
+          </div>
+          <div class="next-step" id="next-step"></div>
+        </div>
+
+        <div class="dash-section" style="--rail: var(--accent-2)">
+          <div class="section-head"><span class="section-title mono" data-i18n="sysmon.title"></span><span class="section-line"></span></div>
+          <div class="sysmon-grid" id="sysmon-grid"></div>
+        </div>
+
+        <div class="dash-section" style="--rail: var(--accent-2)">
+          <div class="section-head"><span class="section-title mono" data-i18n="dashboard.systemSection"></span><span class="section-line"></span></div>
+          <div class="health-panel" id="health-panel"></div>
+        </div>
+
+        <div class="dash-section" style="--rail: var(--accent-2)">
+          <div class="section-head"><span class="section-title mono" data-i18n="nav.graphics"></span><span class="section-line"></span><span class="section-count mono" id="dash-graphics-count"></span></div>
+          <div class="card-grid" id="dash-graphics-grid"></div>
+        </div>
+
+        <div class="dash-section" style="--rail: var(--accent-1)">
+          <div class="section-head"><span class="section-title mono" data-i18n="nav.connect"></span><span class="section-line"></span><span class="section-count mono" id="dash-servers-count"></span></div>
+          <div class="server-rows" id="dash-servers-rows"></div>
+        </div>
+      </div>
+
+      <div class="view-connect hidden" id="view-connect">
+        <header class="content-header">
+          <div>
+            <h1 data-i18n="connect.title"></h1>
+            <p class="subtitle" id="server-count"></p>
+          </div>
+          <div class="content-header-actions">
+            <button class="btn btn-ghost" id="btn-export-settings" data-i18n="connect.export"></button>
+            <button class="btn btn-ghost" id="btn-import-settings" data-i18n="connect.import"></button>
+            <button class="btn btn-primary" id="btn-add-server" data-i18n="connect.addServer"></button>
+          </div>
+        </header>
+        <section class="card-grid" id="server-grid"></section>
+      </div>
+
+      <div class="view-apps hidden" id="view-apps">
+        <header class="content-header">
+          <div>
+            <h1 data-i18n="apps.title"></h1>
+            <p class="subtitle" id="apps-count"></p>
+          </div>
+        </header>
+        <section class="card-grid" id="apps-grid"></section>
+      </div>
+
+      <div class="view-tools hidden" id="view-tools">
+        <header class="content-header">
+          <div>
+            <h1 data-i18n="header.title"></h1>
+            <p class="subtitle" id="plugin-count"></p>
+          </div>
+          <div class="search-box">
+            <span class="search-icon" data-icon="search"></span>
+            <input type="text" id="search" class="search-input" data-i18n-placeholder="search.placeholder" />
+          </div>
+        </header>
+
+        <section class="card-grid" id="card-grid"></section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Plugin run modal -->
+  <div class="overlay" id="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span class="modal-icon" id="modal-icon"></span>
+          <div>
+            <h2 id="modal-name"></h2>
+            <p id="modal-desc" class="subtitle"></p>
+          </div>
+        </div>
+        <button class="icon-btn" id="modal-close">✕</button>
+      </div>
+
+      <div class="steps" id="modal-steps">
+        <div class="step active" id="step1"><div class="step-dot">1</div></div>
+        <div class="step-line" id="step-line"></div>
+        <div class="step" id="step2"><div class="step-dot">2</div></div>
+      </div>
+
+      <div class="modal-body">
+        <div id="modal-inputs" class="input-list"></div>
+
+        <div id="modal-results" class="results hidden">
+          <h3 data-i18n="modal.resultsTitle"></h3>
+          <ul id="modal-items" class="item-list"></ul>
+          <p id="modal-total" class="total-size"></p>
+          <ul id="modal-warnings" class="warning-list"></ul>
+        </div>
+
+        <div id="modal-progress" class="progress-wrap hidden">
+          <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+          <p class="progress-label" id="progress-label"></p>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="btn-dryrun" data-i18n="modal.dryrun"></button>
+        <button class="btn btn-primary" id="btn-confirm" data-i18n="modal.confirm" disabled></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/edit server modal -->
+  <div class="overlay" id="server-modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span class="modal-icon" data-icon="tool-launch"></span>
+          <div>
+            <h2 id="server-modal-title" data-i18n="connect.addServer"></h2>
+            <p class="subtitle" data-i18n="connect.formSubtitle"></p>
+          </div>
+        </div>
+        <button class="icon-btn" id="server-modal-close">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="input-list">
+          <div class="input-field">
+            <label data-i18n="connect.form.logo"></label>
+            <div class="logo-picker-row">
+              <div class="logo-preview" id="server-logo-preview"></div>
+              <button class="btn btn-ghost btn-small" id="server-logo-pick" data-i18n="connect.form.chooseLogo"></button>
+              <button class="btn btn-ghost btn-small hidden" id="server-logo-clear" data-i18n="connect.form.clearLogo"></button>
+            </div>
+          </div>
+
+          <div class="input-field">
+            <label data-i18n="connect.form.name"></label>
+            <input type="text" id="server-name" data-i18n-placeholder="connect.form.namePlaceholder" />
+          </div>
+
+          <div class="input-field">
+            <label data-i18n="connect.form.mode"></label>
+            <select id="server-mode">
+              <option value="quickconnect" data-i18n="connect.form.modeQuick"></option>
+              <option value="customLauncher" data-i18n="connect.form.modeLauncher"></option>
+            </select>
+          </div>
+
+          <div class="input-field">
+            <label data-i18n="connect.form.address"></label>
+            <div class="file-picker-row">
+              <input type="text" id="server-address" data-i18n-placeholder="connect.form.addressPlaceholder" />
+              <button class="btn btn-ghost btn-small" id="server-lookup" data-i18n="connect.form.lookup"></button>
+            </div>
+            <p class="field-hint" data-i18n="connect.form.addressHint"></p>
+            <p class="field-status" id="server-lookup-status" hidden></p>
+          </div>
+
+          <div class="input-field" id="server-launcher-field">
+            <label data-i18n="connect.form.launcher"></label>
+            <div class="file-picker-row">
+              <input type="text" id="server-launcher-path" readonly data-i18n-placeholder="browse.filePlaceholder" />
+              <button class="btn btn-ghost btn-small" id="server-launcher-pick" data-i18n="browse.file"></button>
+            </div>
+            <p class="field-hint" data-i18n="connect.form.launcherHint"></p>
+          </div>
+
+          <div class="input-field" id="server-args-field">
+            <label data-i18n="connect.form.args"></label>
+            <input type="text" id="server-args" placeholder="+connect {address}" />
+            <p class="field-hint" data-i18n="connect.form.argsHint"></p>
+          </div>
+
+          <div class="input-field" id="server-autoclick-field">
+            <div class="checkbox-row">
+              <input type="checkbox" id="server-autoclick-enabled" />
+              <label for="server-autoclick-enabled" data-i18n="connect.form.autoClick"></label>
+            </div>
+            <p class="field-hint" data-i18n="connect.form.autoClickHint"></p>
+            <div class="autoclick-row">
+              <button class="btn btn-ghost btn-small" id="server-autoclick-capture" data-i18n="connect.form.captureClick"></button>
+              <span class="field-status" id="server-autoclick-status"></span>
+            </div>
+            <div class="input-field autoclick-delay-field">
+              <label data-i18n="connect.form.autoClickDelay"></label>
+              <input type="number" id="server-autoclick-delay" min="0" step="500" value="3000" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-danger hidden" id="btn-delete-server" data-i18n="connect.form.delete"></button>
+        <button class="btn btn-primary" id="btn-save-server" data-i18n="connect.form.save"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- History drawer -->
+  <div class="overlay" id="history-overlay">
+    <div class="drawer">
+      <div class="drawer-header">
+        <h2 data-i18n="history.title"></h2>
+        <button class="icon-btn" id="history-close">✕</button>
+      </div>
+      <div class="drawer-body" id="history-list"></div>
+    </div>
+  </div>
+
+  <div class="toast-stack" id="toast-stack"></div>
+
+  <script src="icons.js"></script>
+  <script src="i18n.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

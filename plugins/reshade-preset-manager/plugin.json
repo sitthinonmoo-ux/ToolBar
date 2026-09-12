@@ -1,0 +1,34 @@
+{
+  "id": "reshade-preset-manager",
+  "name": { "th": "จัดการพรีเซ็ต ReShade", "en": "Manage ReShade preset" },
+  "description": {
+    "th": "สลับไฟล์พรีเซ็ต ReShade.ini ในโฟลเดอร์ plugins ของ FiveM — สำรองพรีเซ็ตเดิมไว้ให้อัตโนมัติ",
+    "en": "Swaps the ReShade.ini preset file in FiveM's plugins folder — automatically backs up the current one first"
+  },
+  "icon": "tool-reshade",
+  "category": "graphics",
+  "dangerous": true,
+  "inputs": [
+    {
+      "key": "fivemAppDir",
+      "type": "folder-picker",
+      "label": { "th": "โฟลเดอร์ FiveM.app", "en": "FiveM.app folder" },
+      "detectable": true,
+      "detectLabel": { "th": "ค้นหา FiveM อัตโนมัติ", "en": "Auto-detect FiveM" },
+      "hint": {
+        "th": "ปกติอยู่ที่ %localappdata%\\FiveM\\FiveM.app ถ้าค้นหาไม่เจอ เลือกเองได้",
+        "en": "Usually at %localappdata%\\FiveM\\FiveM.app — browse manually if auto-detect can't find it"
+      }
+    },
+    {
+      "key": "presetFile",
+      "type": "file-picker",
+      "label": { "th": "ไฟล์พรีเซ็ต (.ini)", "en": "Preset file (.ini)" },
+      "filters": [{ "name": "ReShade preset", "extensions": ["ini"] }],
+      "hint": {
+        "th": "เลือกไฟล์ .ini พรีเซ็ตที่ต้องการใช้ — จะถูกคัดลอกไปแทนที่ ReShade.ini ปัจจุบันในโฟลเดอร์ plugins ของ FiveM (สำรองไฟล์เดิมไว้ให้อัตโนมัติ)",
+        "en": "Pick the .ini preset to use — it replaces the current ReShade.ini in FiveM's plugins folder (the existing one is backed up automatically)"
+      }
+    }
+  ]
+}
