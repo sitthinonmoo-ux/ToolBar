@@ -41,16 +41,46 @@ async function fetchWithTimeout(url, ms = 120000) {
 // entries mirror the plugins folder exactly (the zip was made from "plugins\*", no
 // wrapper folder) — so callers can treat it the same way a manually-picked folder
 // used to be treated before this plugin switched from a folder-picker to a fetch.
-async function downloadPack(log) {
+//
+// Streams to disk instead of buffering the whole ~93MB response in memory, and reports
+// byte-level progress via onPercent(0-90) while it does — without this the modal's
+// progress bar sat frozen at 0% for however long the download took (a slow connection
+// makes that look identical to a genuine hang, which is exactly what got reported).
+// The remaining 90-100% is left for the caller's per-file copy loop after extraction.
+async function downloadPack(log, onPercent) {
   log('downloading plugins pack from GitHub release');
   const res = await fetchWithTimeout(PLUGINS_PACK_URL, 120000);
   if (!res.ok) throw new Error(`ดาวน์โหลดชุด ReShade plugins ไม่สำเร็จ (HTTP ${res.status})`);
-  const buf = Buffer.from(await res.arrayBuffer());
-  log(`download complete, ${buf.length} bytes`);
 
   const tmpZip = path.join(os.tmpdir(), `reshade-plugins-${Date.now()}.zip`);
+  const totalBytes = Number(res.headers.get('content-length')) || 0;
+
+  if (res.body && typeof res.body.getReader === 'function') {
+    const reader = res.body.getReader();
+    const fileHandle = fs.openSync(tmpZip, 'w');
+    let received = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        fs.writeSync(fileHandle, value);
+        received += value.length;
+        if (totalBytes > 0 && onPercent) onPercent(Math.round((received / totalBytes) * 90));
+      }
+    } finally {
+      fs.closeSync(fileHandle);
+    }
+    log(`download complete, ${received} bytes`);
+  } else {
+    // Fallback for a fetch implementation without a streamable body — no incremental
+    // progress possible, but the download itself still completes correctly.
+    const buf = Buffer.from(await res.arrayBuffer());
+    fs.writeFileSync(tmpZip, buf);
+    log(`download complete, ${buf.length} bytes`);
+    if (onPercent) onPercent(90);
+  }
+
   const tmpExtract = path.join(os.tmpdir(), `reshade-plugins-extract-${Date.now()}`);
-  fs.writeFileSync(tmpZip, buf);
   try {
     await extractZip(tmpZip, { dir: tmpExtract });
   } finally {
@@ -101,9 +131,15 @@ async function run(params, context) {
   }
 
   const log = (msg) => debugLog.log(context.app, `[reshade-plugins-restore] ${msg}`);
+  // One continuous 0-100 bar across both phases (done/total=100 throughout) instead of
+  // restarting a fresh done/total for each phase — a reset partway through would jump
+  // the bar backward, which reads as worse than not moving at all.
+  const tick = (percent) => context.onProgress && context.onProgress({ done: percent, total: 100 });
+  tick(0);
+
   let extractedDir;
   try {
-    extractedDir = await downloadPack(log);
+    extractedDir = await downloadPack(log, tick);
   } catch (err) {
     log(`downloadPack FAILED: ${err.stack || err.message}`);
     return { success: false, message: err.message };
@@ -117,8 +153,6 @@ async function run(params, context) {
 
     const pluginsDir = path.join(fivemAppDir, 'plugins');
     fs.mkdirSync(pluginsDir, { recursive: true });
-    const total = entries.length;
-    const tick = (done) => context.onProgress && context.onProgress({ done, total });
     const backups = [];
 
     entries.forEach((entry, i) => {
@@ -128,7 +162,7 @@ async function run(params, context) {
         if (record) backups.push(record);
       }
       fs.cpSync(entry.src, dest, { recursive: true });
-      tick(i + 1);
+      tick(90 + Math.round(((i + 1) / entries.length) * 10));
     });
 
     log(`copied ${entries.length} item(s) into ${pluginsDir}, ${backups.length} backed up`);
