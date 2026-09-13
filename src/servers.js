@@ -3,7 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { shell } = require('electron');
-const { detectFiveMAppDir, repairProtocolHandler } = require('./fivem');
+const { detectFiveMAppDir, repairProtocolHandler, isFiveMRunning } = require('./fivem');
 
 // cwd matters here: a plain double-click from Explorer always runs with the target's
 // own folder as the working directory, but our spawn() never set one — meaning FiveM
@@ -139,21 +139,42 @@ async function launchServer(server) {
     return { success: true, message: `กำลังเปิดรันเชอร์ของ ${server.name}...` };
   }
 
-  // FiveM is confirmed (cfx.re forum reports of this exact crash) to actively detect
-  // and refuse launches that look like they're coming from a third-party tool — that's
-  // deliberate on their end, not a bug, so spawning FiveM.exe ourselves (however
-  // carefully) is fundamentally the wrong approach and was tried and failed here across
-  // several attempts. shell.openExternal is the one invocation that looks IDENTICAL to
-  // a real browser clicking a fivem:// link, which FiveM does allow. The only genuine,
-  // fixable bug on this machine was the protocol registration itself being blank
-  // (HKCU\Software\Classes\fivem\shell\open\command had no command at all) — repairing
-  // that is fixing a real misconfiguration, not working around an intentional block.
-  const uri = buildConnectUri(server.address);
+  // The actual pattern across every attempt at this (see git history — several
+  // launch-mechanism rewrites all failed identically): opening FiveM.exe plain, with
+  // zero arguments, always works — a manual double-click always works too. What never
+  // works is a COLD boot (FiveM not already running) that carries a connect argument
+  // from the very first instant, regardless of which mechanism delivers that argument
+  // (direct spawn, shell.openExternal via a working protocol registration, etc). So
+  // instead of continuing to guess at *how* to deliver a cold connect, stop ever doing
+  // one: if FiveM isn't already running, just open it plain and ask the user to press
+  // Play again once it's up — at that point it's a warm connect (FiveM already running),
+  // which is the one scenario that's actually confirmed to work.
   const fivemExe = await findFiveMExe();
+  const running = await isFiveMRunning();
+
+  if (!running) {
+    if (fivemExe) {
+      shell.openPath(fivemExe);
+      return {
+        success: true,
+        message: `FiveM ยังไม่ได้เปิด — เปิดให้แล้ว รอโหลดเสร็จแล้วกด Play ที่ ${server.name} อีกครั้งเพื่อเชื่อมต่อ`,
+      };
+    }
+    // Can't find FiveM.exe directly (unusual install layout) — fall back to asking
+    // Windows to resolve fivem:// itself, same as before.
+    shell.openExternal(buildConnectUri(server.address));
+    return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
+  }
+
+  // FiveM is already running, so this is a warm connect — repair the protocol
+  // registration first (the one genuine, fixable bug found on this machine: an
+  // interrupted install had left HKCU\Software\Classes\fivem\shell\open\command
+  // completely blank) then hand off via shell.openExternal, the same mechanism
+  // FiveM's own official Discord Rich Presence "Join Server" buttons use.
   if (fivemExe) {
     await repairProtocolHandler(fivemExe);
   }
-  shell.openExternal(uri);
+  shell.openExternal(buildConnectUri(server.address));
   return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
 }
 
