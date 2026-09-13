@@ -1,9 +1,48 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
 const { shell } = require('electron');
 const { detectFiveMAppDir, repairProtocolHandler, isFiveMRunning } = require('./fivem');
+const { extractJoinCode, parseDirectEndpoint, fetchPureLevel } = require('./serverStatus');
+
+function psEscape(s) {
+  return String(s).replace(/'/g, "''");
+}
+
+// Builds a real Windows shortcut (.lnk) pointing at FiveM.exe with launch arguments
+// baked in, then opens it via shell.openPath — the same thing a user creating a
+// desktop shortcut per FiveM's own documented "-pure_X" launch argument feature would
+// do, and functionally identical to double-clicking that shortcut in Explorer. This
+// matters because a bare FiveM.exe process spawned with arguments crashes (see the
+// launchServer comment below); a .lnk opened through the shell doesn't put this app
+// anywhere in the resulting process's ancestry, unlike any direct spawn.
+function createShortcut(lnkPath, targetPath, args, workingDir) {
+  return new Promise((resolve, reject) => {
+    const script = [
+      '$ws = New-Object -ComObject WScript.Shell',
+      `$sc = $ws.CreateShortcut('${psEscape(lnkPath)}')`,
+      `$sc.TargetPath = '${psEscape(targetPath)}'`,
+      `$sc.Arguments = '${psEscape(args)}'`,
+      `$sc.WorkingDirectory = '${psEscape(workingDir)}'`,
+      '$sc.Save()',
+    ].join('; ');
+    const child = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true });
+    child.on('error', reject);
+    child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`powershell exited with code ${code}`))));
+  });
+}
+
+// FiveM's `+connect` argument wants a bare host:port or a "cfx.re/join/<code>" — not
+// the full fivem:// URI buildConnectUri produces for the protocol-handler path.
+function connectTarget(rawAddress) {
+  const code = extractJoinCode(rawAddress);
+  if (code) return `cfx.re/join/${code}`;
+  const direct = parseDirectEndpoint(rawAddress);
+  if (direct) return `${direct.host}:${direct.port}`;
+  return (rawAddress || '').trim();
+}
 
 // cwd matters here: a plain double-click from Explorer always runs with the target's
 // own folder as the working directory, but our spawn() never set one — meaning FiveM
@@ -139,18 +178,38 @@ async function launchServer(server) {
     return { success: true, message: `กำลังเปิดรันเชอร์ของ ${server.name}...` };
   }
 
-  // The confirmed pattern: opening FiveM.exe plain always works, and connecting via
-  // shell.openExternal while FiveM is already running always works — but combining
-  // them into one instant (a cold boot that carries a connect argument from the very
-  // first moment) always crashes, no matter which mechanism delivers that argument.
-  // Rather than making the user click Play twice, chain the two known-good steps
-  // ourselves: open plain, poll isFiveMRunning() until its actual game process shows
-  // up (not a fixed guessed delay), then connect — one click, still never combining
-  // the two things that don't survive being combined.
   const fivemExe = await findFiveMExe();
-  const running = await isFiveMRunning();
   const uri = buildConnectUri(server.address);
 
+  // FiveM officially documents launching straight into a specific "-pure_X" level via
+  // a Windows shortcut (see docs.fivem.net's Shortcut page) — combined with a
+  // "+connect" argument, this launches already at the level the server requires
+  // instead of connecting and getting prompted to change level + restart mid-connect.
+  // Building that as a real .lnk and opening it via the shell (not spawning FiveM.exe
+  // directly, which crashes regardless of how carefully it's invoked — see git
+  // history) should also sidestep the cold-boot problem entirely, since it's the same
+  // path a user's own desktop shortcut would take.
+  if (fivemExe) {
+    try {
+      const pureLevel = await fetchPureLevel(server.address);
+      const lnkPath = path.join(os.tmpdir(), `toolbar-fivem-connect-${Date.now()}.lnk`);
+      await createShortcut(lnkPath, fivemExe, `-pure_${pureLevel} +connect ${connectTarget(server.address)}`, path.dirname(fivemExe));
+      shell.openPath(lnkPath);
+      setTimeout(() => fs.rm(lnkPath, { force: true }, () => {}), 30000);
+      return { success: true, message: `กำลังเปิด FiveM ที่ Pure Level ${pureLevel} แล้วเชื่อมต่อ ${server.name}...` };
+    } catch {
+      // Shortcut creation/launch failed (e.g. PowerShell unavailable) — fall through
+      // to the older, confirmed-safe-but-slower chained approach below.
+    }
+  }
+
+  // Fallback: the confirmed-safe chain from before the shortcut approach — opening
+  // FiveM.exe plain always works, and connecting via shell.openExternal while FiveM is
+  // already running always works, but combining them into one instant (a cold boot
+  // carrying a connect argument from the first moment) always crashes. Chain the two
+  // safe halves ourselves: open plain, poll isFiveMRunning() until it's actually up,
+  // then connect.
+  const running = await isFiveMRunning();
   const connectNow = async () => {
     if (fivemExe) await repairProtocolHandler(fivemExe);
     shell.openExternal(uri);
@@ -162,21 +221,12 @@ async function launchServer(server) {
   }
 
   if (!fivemExe) {
-    // Can't find FiveM.exe directly (unusual install layout) — fall back to asking
-    // Windows to resolve fivem:// itself, same as before.
     shell.openExternal(uri);
     return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
   }
 
   shell.openPath(fivemExe);
   (async () => {
-    // isFiveMRunning() matches on "FiveM*" broadly (bootstrap, ROS launcher, chrome
-    // helpers, the eventual game process — see its own comment in src/fivem.js), so it
-    // goes true within a second or two of the plain open, well before FiveM has
-    // actually finished settling in. A fixed floor before the first real check keeps
-    // this from sending the connect into that same fragile early window we're trying
-    // to avoid; the polling loop past that point is what adapts to a slower machine
-    // instead of gambling on one fixed guessed delay for everyone.
     await new Promise((resolve) => setTimeout(resolve, 10000));
     const deadline = Date.now() + 60000;
     while (Date.now() < deadline) {
@@ -186,8 +236,6 @@ async function launchServer(server) {
       }
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
-    // Gave up after ~70s without FiveM even appearing to still be running — leave it
-    // as-is rather than silently doing nothing forever.
   })();
   return { success: true, message: `กำลังเปิด FiveM แล้วเชื่อมต่อ ${server.name} ให้อัตโนมัติเมื่อพร้อม...` };
 }

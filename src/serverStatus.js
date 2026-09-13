@@ -116,4 +116,26 @@ async function fetchServerStatus(rawAddress) {
   }
 }
 
-module.exports = { fetchServerStatus, extractJoinCode, parseDirectEndpoint };
+// Looks up just the server's declared sv_pureLevel (0-2) — used to launch FiveM
+// already at the right purity level for a given server (see servers.js), instead of
+// connecting and letting FiveM prompt to change level + restart mid-connect.
+async function fetchPureLevel(rawAddress) {
+  const code = extractJoinCode(rawAddress);
+  try {
+    if (code) {
+      const data = await fetchJson(`https://servers-frontend.fivem.net/api/servers/single/${code}`);
+      const vars = (data && data.Data && data.Data.vars) || {};
+      return Number(vars.sv_pureLevel) || 0;
+    }
+    const direct = parseDirectEndpoint(rawAddress);
+    if (!direct) return 0;
+    const info = await fetchJson(`http://${direct.host}:${direct.port}/info.json`);
+    return Number((info.vars || {}).sv_pureLevel) || 0;
+  } catch {
+    // No pure level info available (offline, unusual address, etc) — 0 (off) is the
+    // safe default; worst case FiveM prompts to raise it once connected, same as today.
+    return 0;
+  }
+}
+
+module.exports = { fetchServerStatus, extractJoinCode, parseDirectEndpoint, fetchPureLevel };
