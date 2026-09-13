@@ -3,6 +3,9 @@ let activeCategory = 'home';
 let searchTerm = '';
 let currentPlugin = null;
 let currentParams = {};
+// Set by the checkbox-group renderer when the open card has status badges; null for every
+// other card. Re-read after a run so the badges reflect the machine, not the pre-run guess.
+let refreshStatusBadges = null;
 let lastHealth = null;
 
 const grid = document.getElementById('card-grid');
@@ -654,6 +657,7 @@ function advanceSteps() {
 function openModal(plugin) {
   currentPlugin = plugin;
   currentParams = {};
+  refreshStatusBadges = null;
 
   document.getElementById('modal-icon').innerHTML = iconMarkup(plugin.icon);
   document.getElementById('modal-name').textContent = L(plugin.name);
@@ -765,18 +769,23 @@ function openModal(plugin) {
       toggleBtn.textContent = checkboxes.every((cb) => cb.checked) ? t('group.uncheckAll') : t('group.checkAll');
       // Fire-and-forget: fills in "already applied / not yet" badges once the check
       // finishes. Plugins without checkStatus just get an empty map back.
-      window.toolbarApi
-        .checkStatus(plugin.id)
-        .then((statusMap) => {
-          for (const [key, applied] of Object.entries(statusMap || {})) {
-            const el = field.querySelector(`[data-status-for="${key}"]`);
-            if (!el || applied === null) continue;
-            el.textContent = applied ? t('tweak.applied') : t('tweak.notApplied');
-            el.classList.toggle('ok', applied);
-            el.classList.toggle('bad', !applied);
-          }
-        })
-        .catch((err) => console.error(`checkStatus(${plugin.id}) failed:`, err));
+      // Kept as a reusable closure because these badges also have to be re-read after a
+      // run — otherwise a failed batch leaves the pre-run badges on screen, still claiming
+      // every item is applied while the result text says the opposite.
+      refreshStatusBadges = () =>
+        window.toolbarApi
+          .checkStatus(plugin.id)
+          .then((statusMap) => {
+            for (const [key, applied] of Object.entries(statusMap || {})) {
+              const el = field.querySelector(`[data-status-for="${key}"]`);
+              if (!el || applied === null) continue;
+              el.textContent = applied ? t('tweak.applied') : t('tweak.notApplied');
+              el.classList.toggle('ok', applied);
+              el.classList.toggle('bad', !applied);
+            }
+          })
+          .catch((err) => console.error(`checkStatus(${plugin.id}) failed:`, err));
+      refreshStatusBadges();
     } else if (input.type === 'checkbox') {
       currentParams[input.key] = !!input.default;
       const id = `chk-${input.key}`;
@@ -879,6 +888,10 @@ btnConfirm.addEventListener('click', async () => {
       progressLabel.textContent = t('modal.progressDone');
     }
     toast((result.message || '').replace(/\n/g, '<br/>'), result.success ? 'success' : 'error');
+    // On failure the modal stays open, so the badges behind it have to be re-read from the
+    // machine — they were filled in before the run and would otherwise keep showing the
+    // old verdict for the very items the result just reported as failed.
+    if (!result.success && refreshStatusBadges) await refreshStatusBadges();
     if (result.success) closeModal();
   } catch (err) {
     toast(err.message, 'error');

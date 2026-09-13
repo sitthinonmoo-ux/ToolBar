@@ -20,8 +20,15 @@ function dryRun(params) {
     warnings.push('มีรายการที่ต้องแก้ค่าระดับเครื่อง (HKLM) — จะมีหน้าต่างขอสิทธิ์ Administrator (UAC) เด้งขึ้นมาให้กดยืนยัน');
     warnings.push('จะสร้าง System Restore Point ให้ก่อนแก้อัตโนมัติ — ถ้าอยากย้อนกลับทั้งหมดทีเดียว ใช้ System Restore ได้ (ข้ามถ้าปิดอยู่ หรือสร้างไปแล้วในช่วง 24 ชม.)');
   }
-  if (selected.includes('hwGpuScheduling')) {
-    warnings.push('การเปิด Hardware-accelerated GPU Scheduling ต้อง restart เครื่องถึงจะมีผลจริง');
+  // Named up front rather than only in the result, so the restart isn't a surprise after
+  // the fact — these are the items whose value lands immediately but stays inert until
+  // the machine (or the driver/session that reads it at load) comes back up.
+  const restartItems = selected
+    .map((key) => TWEAK_INFO.get(key))
+    .filter((t) => t && t.needsRestart)
+    .map((t) => t.name.th);
+  if (restartItems.length) {
+    warnings.push(`ต้อง restart เครื่องก่อนถึงจะมีผลจริง ${restartItems.length} รายการ: ${restartItems.join(', ')}`);
   }
   // Surface each risky tweak's specific trade-off so the user sees it before confirming,
   // not after — these are opinionated changes with a real downside, not free wins.

@@ -8,6 +8,36 @@ const { spawn } = require('child_process');
 // own diagnostics session) — the point of this plugin is to let the user reapply the
 // same set in one click after a fresh Windows install, instead of hunting down each
 // registry key by hand again.
+// Windows loads the per-user input settings under HKCU\Control Panel\... into the live
+// session once, at logon. Writing those keys therefore changes what the NEXT session will
+// use while leaving the running one untouched — which is exactly the "it said it worked
+// but nothing feels different" trap, made worse by the fact that a check reading the same
+// key straight back reports success. Every such tweak also has to push the new value
+// through SystemParametersInfo with SPIF_SENDCHANGE (0x02) so it applies right now.
+// The type definition is guarded because several tweaks in one batch share this helper
+// and Add-Type throws if the same class is defined twice in a single PowerShell session.
+const SPI_HELPER = `
+if (-not ('ToolBarSPI' -as [type])) {
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+[StructLayout(LayoutKind.Sequential)]
+public struct TOOLBAR_ACCESSKEYS {
+    public uint cbSize;
+    public uint dwFlags;
+}
+public class ToolBarSPI {
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, int[] pvParam, uint fWinIni);
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, IntPtr pvParam, uint fWinIni);
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SystemParametersInfo(uint uiAction, uint uiParam, ref TOOLBAR_ACCESSKEYS pvParam, uint fWinIni);
+}
+'@
+}
+`;
+
 const TWEAKS = {
   mousePrecision: {
     name: { th: 'ปิด Enhance Pointer Precision (mouse acceleration)', en: 'Disable Enhance Pointer Precision (mouse acceleration)' },
@@ -16,10 +46,19 @@ const TWEAKS = {
 Set-ItemProperty -Path 'HKCU:\\Control Panel\\Mouse' -Name MouseSpeed -Value '0'
 Set-ItemProperty -Path 'HKCU:\\Control Panel\\Mouse' -Name MouseThreshold1 -Value '0'
 Set-ItemProperty -Path 'HKCU:\\Control Panel\\Mouse' -Name MouseThreshold2 -Value '0'
+${SPI_HELPER}
+$mouse = [int[]](0, 0, 0)
+if (-not [ToolBarSPI]::SystemParametersInfo(0x0004, 0, $mouse, 0x03)) { throw 'SystemParametersInfo (SPI_SETMOUSE) failed' }
 `,
+    // Reads the value the running session is actually using (SPI_GETMOUSE), not the
+    // registry copy — the registry can already say 0 while the live session still
+    // accelerates, and reporting "applied" in that state is the whole bug.
     check: `
+${SPI_HELPER}
+$live = [int[]](1, 1, 1)
+[ToolBarSPI]::SystemParametersInfo(0x0003, 0, $live, 0) | Out-Null
 $p = Get-ItemProperty -Path 'HKCU:\\Control Panel\\Mouse' -ErrorAction SilentlyContinue
-$p -and $p.MouseSpeed -eq '0' -and $p.MouseThreshold1 -eq '0' -and $p.MouseThreshold2 -eq '0'
+$p -and $p.MouseSpeed -eq '0' -and $p.MouseThreshold1 -eq '0' -and $p.MouseThreshold2 -eq '0' -and $live[0] -eq 0 -and $live[1] -eq 0 -and $live[2] -eq 0
 `,
   },
   powerUltimate: {
@@ -64,6 +103,7 @@ $v -eq 0
   hwGpuScheduling: {
     name: { th: 'เปิด Hardware-accelerated GPU Scheduling (ต้อง restart เครื่อง)', en: 'Enable Hardware-accelerated GPU Scheduling (needs a restart)' },
     admin: true,
+    needsRestart: true,
     script: `
 Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name HwSchMode -Value 2 -Type DWord
 `,
@@ -183,6 +223,7 @@ $ifs.Count -gt 0 -and $allSet
   hpetDisable: {
     name: { th: 'ปิด HPET / Dynamic Tick (ลด timer latency)', en: 'Disable HPET / Dynamic Tick (lowers timer latency)' },
     admin: true,
+    needsRestart: true,
     risk: {
       th: 'แก้ boot configuration (bcdedit) — บางเมนบอร์ด/CPU อาจทำให้เวลาของระบบเดินคลาดเคลื่อนหรือ VM/แอปที่พึ่ง high-precision timer ทำงานผิดปกติ ต้อง restart ถึงจะมีผล',
       en: 'Changes boot configuration (bcdedit) — on some boards/CPUs this can cause clock drift or break apps/VMs relying on a high-precision timer. Needs a restart to take effect.',
@@ -221,6 +262,7 @@ $minOk -and $maxOk
   win32PrioritySeparation: {
     name: { th: 'ตั้ง Win32PrioritySeparation = 26 (โปรไฟล์เกม)', en: 'Set Win32PrioritySeparation = 26 (gaming profile)' },
     admin: true,
+    needsRestart: true,
     script: `
 Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl' -Name Win32PrioritySeparation -Value 26 -Type DWord
 Set-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games' -Name 'GPU Priority' -Value 8 -Type DWord
@@ -236,6 +278,7 @@ $v -eq 26
   disablePagingExecutive: {
     name: { th: 'ปิด Paging Executive (ห้าม kernel paging ลง disk)', en: 'Disable Paging Executive (keeps kernel memory off disk)' },
     admin: true,
+    needsRestart: true,
     risk: {
       th: 'เพิ่มการใช้ RAM ถาวรของระบบ — ถ้าเครื่องมี RAM น้อย (ต่ำกว่า 16GB) อาจทำให้แรมเต็มง่ายขึ้นแทนที่จะเร็วขึ้น',
       en: 'Increases the system\'s permanent RAM usage — on machines with less RAM (under 16GB) this can cause memory pressure instead of a speed gain.',
@@ -274,6 +317,7 @@ $allDisabled
   tcpAdvancedTuning: {
     name: { th: 'TCP/UDP ขั้นสูง (RSS/RSC/ECN/timestamps/fastopen/hystart + ACK ไม่หน่วง)', en: 'Advanced TCP/UDP tuning (RSS/RSC/ECN/timestamps/fastopen/hystart + instant ACK)' },
     admin: true,
+    needsRestart: true,
     script: `
 netsh int tcp set global autotuninglevel=normal | Out-Null
 netsh int tcp set global chimney=disabled | Out-Null
@@ -337,6 +381,7 @@ $do = (Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersi
   inputBufferSize: {
     name: { th: 'ลด Mouse/Keyboard Driver Buffer Size (ลด input lag)', en: 'Reduce mouse/keyboard driver buffer size (lowers input lag)' },
     admin: true,
+    needsRestart: true,
     script: `
 Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\mouclass\\Parameters' -Name MouseDataQueueSize -Value 16 -Type DWord
 Set-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Services\\kbdclass\\Parameters' -Name KeyboardDataQueueSize -Value 16 -Type DWord
@@ -353,11 +398,29 @@ $m -eq 16 -and $k -eq 16
     script: `
 Set-ItemProperty -Path 'HKCU:\\Control Panel\\Accessibility\\StickyKeys' -Name Flags -Value '506'
 Set-ItemProperty -Path 'HKCU:\\Control Panel\\Accessibility\\ToggleKeys' -Name Flags -Value '58'
+${SPI_HELPER}
+$sk = New-Object TOOLBAR_ACCESSKEYS
+$sk.cbSize = [System.Runtime.InteropServices.Marshal]::SizeOf($sk)
+$sk.dwFlags = 506
+if (-not [ToolBarSPI]::SystemParametersInfo(0x003B, 0, [ref]$sk, 0x03)) { throw 'SystemParametersInfo (SPI_SETSTICKYKEYS) failed' }
+$tk = New-Object TOOLBAR_ACCESSKEYS
+$tk.cbSize = [System.Runtime.InteropServices.Marshal]::SizeOf($tk)
+$tk.dwFlags = 58
+if (-not [ToolBarSPI]::SystemParametersInfo(0x0035, 0, [ref]$tk, 0x03)) { throw 'SystemParametersInfo (SPI_SETTOGGLEKEYS) failed' }
 `,
+    // SPI_GETSTICKYKEYS / SPI_GETTOGGLEKEYS report what the session will actually honour
+    // when the hotkey is pressed, which is the thing this tweak is meant to disable.
     check: `
+${SPI_HELPER}
+$liveSk = New-Object TOOLBAR_ACCESSKEYS
+$liveSk.cbSize = [System.Runtime.InteropServices.Marshal]::SizeOf($liveSk)
+[ToolBarSPI]::SystemParametersInfo(0x003A, 0, [ref]$liveSk, 0) | Out-Null
+$liveTk = New-Object TOOLBAR_ACCESSKEYS
+$liveTk.cbSize = [System.Runtime.InteropServices.Marshal]::SizeOf($liveTk)
+[ToolBarSPI]::SystemParametersInfo(0x0034, 0, [ref]$liveTk, 0) | Out-Null
 $sk = (Get-ItemProperty -Path 'HKCU:\\Control Panel\\Accessibility\\StickyKeys' -ErrorAction SilentlyContinue).Flags
 $tk = (Get-ItemProperty -Path 'HKCU:\\Control Panel\\Accessibility\\ToggleKeys' -ErrorAction SilentlyContinue).Flags
-$sk -eq '506' -and $tk -eq '58'
+$sk -eq '506' -and $tk -eq '58' -and $liveSk.dwFlags -eq 506 -and $liveTk.dwFlags -eq 58
 `,
   },
   keyboardSpeedMax: {
@@ -366,10 +429,20 @@ $sk -eq '506' -and $tk -eq '58'
     script: `
 Set-ItemProperty -Path 'HKCU:\\Control Panel\\Keyboard' -Name KeyboardDelay -Value '0'
 Set-ItemProperty -Path 'HKCU:\\Control Panel\\Keyboard' -Name KeyboardSpeed -Value '31'
+${SPI_HELPER}
+if (-not [ToolBarSPI]::SystemParametersInfo(0x000B, 31, [IntPtr]::Zero, 0x03)) { throw 'SystemParametersInfo (SPI_SETKEYBOARDSPEED) failed' }
+if (-not [ToolBarSPI]::SystemParametersInfo(0x0017, 0, [IntPtr]::Zero, 0x03)) { throw 'SystemParametersInfo (SPI_SETKEYBOARDDELAY) failed' }
 `,
+    // SPI_GETKEYBOARDSPEED / SPI_GETKEYBOARDDELAY return the live session's values, so a
+    // registry write that has not reached the session yet can no longer pass as applied.
     check: `
+${SPI_HELPER}
+$speed = [int[]](0)
+$delay = [int[]](0)
+[ToolBarSPI]::SystemParametersInfo(0x000A, 0, $speed, 0) | Out-Null
+[ToolBarSPI]::SystemParametersInfo(0x0016, 0, $delay, 0) | Out-Null
 $p = Get-ItemProperty -Path 'HKCU:\\Control Panel\\Keyboard' -ErrorAction SilentlyContinue
-$p -and $p.KeyboardDelay -eq '0' -and $p.KeyboardSpeed -eq '31'
+$p -and $p.KeyboardDelay -eq '0' -and $p.KeyboardSpeed -eq '31' -and $speed[0] -eq 31 -and $delay[0] -eq 0
 `,
   },
   usbSelectiveSuspendOff: {
@@ -413,6 +486,7 @@ Disable-MMAgent -MemoryCompression -ErrorAction Stop
   mouseRawCurve: {
     name: { th: 'ตั้ง Mouse Curve เป็น Raw 1:1 (custom curve)', en: 'Set mouse curve to raw 1:1 (custom curve)' },
     admin: false,
+    needsRestart: true,
     script: `
 Set-ItemProperty -Path 'HKCU:\\Control Panel\\Mouse' -Name SmoothMouseXCurve -Value ([byte[]](0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xC0,0xCC,0x0C,0x00,0x00,0x00,0x00,0x00,0x80,0x99,0x19,0x00,0x00,0x00,0x00,0x00,0x40,0x66,0x26,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x99,0x33,0x00,0x00,0x00,0x00,0x00))
 Set-ItemProperty -Path 'HKCU:\\Control Panel\\Mouse' -Name SmoothMouseYCurve -Value ([byte[]](0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x38,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x70,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xA8,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0xC0,0xDC,0x00,0x00,0x00,0x00,0x00))
@@ -424,8 +498,19 @@ $p -and $p.SmoothMouseXCurve -and ($p.SmoothMouseXCurve[8] -eq 0xC0)
   },
 };
 
+// Sentinel thrown by a tweak whose write succeeded but whose read-back says the value
+// never took hold. It stays ASCII and marker-shaped so it survives the round trip through
+// the script's stdout; summarizeOutput swaps it for the Thai explanation the user reads.
+const VERIFY_FAILED = 'TOOLBAR_VERIFY_FAILED';
+
 function listTweaks() {
-  return Object.entries(TWEAKS).map(([key, t]) => ({ key, name: t.name, admin: t.admin, risk: t.risk || null }));
+  return Object.entries(TWEAKS).map(([key, t]) => ({
+    key,
+    name: t.name,
+    admin: t.admin,
+    risk: t.risk || null,
+    needsRestart: !!t.needsRestart,
+  }));
 }
 
 // Builds one PS script where every selected tweak runs in its OWN try/catch block and
@@ -462,7 +547,24 @@ try {
       const guard = t.requiresCommand
         ? `if (-not (Get-Command '${t.requiresCommand}' -ErrorAction SilentlyContinue)) { throw 'Command ${t.requiresCommand} is not available on this machine (this Windows edition may be missing the related module)' }\n`
         : '';
-      return `try {\n${guard}${t.script}\n  Write-Output 'TOOLBAR_TWEAK_OK:${key}'\n} catch {\n  Write-Output "TOOLBAR_TWEAK_FAIL:${key}: $($_.Exception.Message)"\n}`;
+      // A script that ran without throwing is NOT the same as a setting that took hold:
+      // a write can land on a key Windows ignores, a netsh/powercfg call can print its
+      // own failure and still exit 0, and a value can be overwritten again moments later.
+      // Every tweak already ships the read-back that checkStatus() uses for its badges, so
+      // the apply path runs that same read-back and only claims success when it passes.
+      // The check runs in its own scope with SilentlyContinue (several bodies rely on a
+      // missing key returning $null rather than throwing) and its last emitted value is
+      // the verdict — matching how checkStatus() evaluates the identical script.
+      const verify = t.check
+        ? `$verify_${key} = @(& {
+  $ErrorActionPreference = 'SilentlyContinue'
+  try {
+${t.check.trim()}
+  } catch { $false }
+}) | Select-Object -Last 1
+if ($verify_${key} -ne $true) { throw '${VERIFY_FAILED}' }\n`
+        : '';
+      return `try {\n${guard}${t.script}\n${verify}  Write-Output 'TOOLBAR_TWEAK_OK:${key}'\n} catch {\n  Write-Output "TOOLBAR_TWEAK_FAIL:${key}: $($_.Exception.Message)"\n}`;
     })
     .join('\n');
   const fullScript = `$ErrorActionPreference = 'Stop'\n${restorePointBlock}\n${tweakBlocks}\nWrite-Output '${doneMarker}'\n`;
@@ -490,18 +592,39 @@ function summarizeOutput(output, selected) {
       continue;
     }
     const failMatch = output.match(new RegExp(`TOOLBAR_TWEAK_FAIL:${key}: (.+)`));
-    failed.push({ name: t.name.th, reason: failMatch ? failMatch[1].trim() : 'ไม่ทราบสาเหตุ' });
+    const rawReason = failMatch ? failMatch[1].trim() : 'ไม่ทราบสาเหตุ';
+    const reason = rawReason.includes(VERIFY_FAILED)
+      ? 'เขียนค่าลงไปแล้ว แต่ตรวจสอบย้อนกลับไม่ผ่าน — ค่ายังไม่มีผลจริง'
+      : rawReason;
+    failed.push({ name: t.name.th, reason });
   }
   const restorePointOk = output.includes('TOOLBAR_RESTOREPOINT_OK');
   const lines = [];
-  if (ok.length) lines.push(`ปรับสำเร็จ ${ok.length} รายการ: ${ok.join(', ')}`);
+  if (ok.length) lines.push(`ปรับสำเร็จ (ตรวจสอบย้อนกลับแล้ว) ${ok.length} รายการ: ${ok.join(', ')}`);
   if (failed.length) lines.push(`ทำไม่สำเร็จ ${failed.length} รายการ: ${failed.map((f) => `${f.name} (${f.reason})`).join('; ')}`);
+  // Only the tweaks that genuinely can't take effect until a reboot get the notice, and
+  // only when one of them actually landed — the old blanket "some items need a restart"
+  // line was appended to every elevated batch, so it read as boilerplate and told the user
+  // nothing about which setting they were still waiting on.
+  const restartPending = selected
+    .filter(([key, t]) => t.needsRestart && hasOkMarker(output, key))
+    .map(([, t]) => t.name.th);
+  if (restartPending.length) {
+    lines.push(`ต้อง restart เครื่องก่อนถึงจะมีผลจริง ${restartPending.length} รายการ: ${restartPending.join(', ')}`);
+  }
   lines.push(
     restorePointOk
       ? 'สร้าง System Restore Point ไว้ก่อนแก้แล้ว — ถ้าอยากย้อนกลับทั้งหมด ใช้ System Restore ได้'
       : 'ข้ามการสร้าง System Restore Point (อาจปิดอยู่ หรือสร้างไปแล้วในช่วง 24 ชม.ที่ผ่านมา) — ปรับด้วยความระวัง'
   );
-  return { success: ok.length > 0, message: lines.join('\n'), okCount: ok.length, failCount: failed.length };
+  // Success means every selected tweak landed. Reporting green when one item out of ten
+  // worked is what let a mostly-failed batch look like a clean run.
+  return {
+    success: failed.length === 0 && ok.length > 0,
+    message: lines.join('\n'),
+    okCount: ok.length,
+    failCount: failed.length,
+  };
 }
 
 // Scans the growing output buffer for OK/FAIL markers belonging to tweaks we haven't
@@ -636,9 +759,10 @@ function runElevated(scriptPath, marker, selected, onProgress) {
       if (output.includes(marker)) {
         // Catch any tweak whose OK/FAIL line landed between the last poll tick and exit.
         if (onProgress) for (const evt of extractNewProgress(output, selected, seen)) onProgress(evt);
-        const result = summarizeOutput(output, selected);
-        result.message += '\n(บางรายการต้อง restart เครื่องถึงจะมีผลจริง)';
-        resolve(result);
+        // The restart notice now comes from summarizeOutput, which names the specific
+        // tweaks that need one — and does so on the unelevated path too, where several
+        // HKCU tweaks that need a re-logon used to get no warning at all.
+        resolve(summarizeOutput(output, selected));
       } else {
         resolve({ success: false, message: `ปรับค่าไม่สำเร็จ: ${output.trim() || 'ไม่ทราบสาเหตุ'}` });
       }
