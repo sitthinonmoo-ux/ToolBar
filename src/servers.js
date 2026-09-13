@@ -139,43 +139,57 @@ async function launchServer(server) {
     return { success: true, message: `กำลังเปิดรันเชอร์ของ ${server.name}...` };
   }
 
-  // The actual pattern across every attempt at this (see git history — several
-  // launch-mechanism rewrites all failed identically): opening FiveM.exe plain, with
-  // zero arguments, always works — a manual double-click always works too. What never
-  // works is a COLD boot (FiveM not already running) that carries a connect argument
-  // from the very first instant, regardless of which mechanism delivers that argument
-  // (direct spawn, shell.openExternal via a working protocol registration, etc). So
-  // instead of continuing to guess at *how* to deliver a cold connect, stop ever doing
-  // one: if FiveM isn't already running, just open it plain and ask the user to press
-  // Play again once it's up — at that point it's a warm connect (FiveM already running),
-  // which is the one scenario that's actually confirmed to work.
+  // The confirmed pattern: opening FiveM.exe plain always works, and connecting via
+  // shell.openExternal while FiveM is already running always works — but combining
+  // them into one instant (a cold boot that carries a connect argument from the very
+  // first moment) always crashes, no matter which mechanism delivers that argument.
+  // Rather than making the user click Play twice, chain the two known-good steps
+  // ourselves: open plain, poll isFiveMRunning() until its actual game process shows
+  // up (not a fixed guessed delay), then connect — one click, still never combining
+  // the two things that don't survive being combined.
   const fivemExe = await findFiveMExe();
   const running = await isFiveMRunning();
+  const uri = buildConnectUri(server.address);
 
-  if (!running) {
-    if (fivemExe) {
-      shell.openPath(fivemExe);
-      return {
-        success: true,
-        message: `FiveM ยังไม่ได้เปิด — เปิดให้แล้ว รอโหลดเสร็จแล้วกด Play ที่ ${server.name} อีกครั้งเพื่อเชื่อมต่อ`,
-      };
-    }
-    // Can't find FiveM.exe directly (unusual install layout) — fall back to asking
-    // Windows to resolve fivem:// itself, same as before.
-    shell.openExternal(buildConnectUri(server.address));
+  const connectNow = async () => {
+    if (fivemExe) await repairProtocolHandler(fivemExe);
+    shell.openExternal(uri);
+  };
+
+  if (running) {
+    await connectNow();
     return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
   }
 
-  // FiveM is already running, so this is a warm connect — repair the protocol
-  // registration first (the one genuine, fixable bug found on this machine: an
-  // interrupted install had left HKCU\Software\Classes\fivem\shell\open\command
-  // completely blank) then hand off via shell.openExternal, the same mechanism
-  // FiveM's own official Discord Rich Presence "Join Server" buttons use.
-  if (fivemExe) {
-    await repairProtocolHandler(fivemExe);
+  if (!fivemExe) {
+    // Can't find FiveM.exe directly (unusual install layout) — fall back to asking
+    // Windows to resolve fivem:// itself, same as before.
+    shell.openExternal(uri);
+    return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
   }
-  shell.openExternal(buildConnectUri(server.address));
-  return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
+
+  shell.openPath(fivemExe);
+  (async () => {
+    // isFiveMRunning() matches on "FiveM*" broadly (bootstrap, ROS launcher, chrome
+    // helpers, the eventual game process — see its own comment in src/fivem.js), so it
+    // goes true within a second or two of the plain open, well before FiveM has
+    // actually finished settling in. A fixed floor before the first real check keeps
+    // this from sending the connect into that same fragile early window we're trying
+    // to avoid; the polling loop past that point is what adapts to a slower machine
+    // instead of gambling on one fixed guessed delay for everyone.
+    await new Promise((resolve) => setTimeout(resolve, 10000));
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+      if (await isFiveMRunning()) {
+        await connectNow();
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+    // Gave up after ~70s without FiveM even appearing to still be running — leave it
+    // as-is rather than silently doing nothing forever.
+  })();
+  return { success: true, message: `กำลังเปิด FiveM แล้วเชื่อมต่อ ${server.name} ให้อัตโนมัติเมื่อพร้อม...` };
 }
 
 const IMAGE_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
