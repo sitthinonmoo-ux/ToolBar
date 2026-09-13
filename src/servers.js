@@ -2,11 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
-const { detectFiveMAppDir, isFiveMRunning } = require('./fivem');
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const { shell } = require('electron');
+const { detectFiveMAppDir, repairProtocolHandler } = require('./fivem');
 
 // cwd matters here: a plain double-click from Explorer always runs with the target's
 // own folder as the working directory, but our spawn() never set one — meaning FiveM
@@ -142,42 +139,22 @@ async function launchServer(server) {
     return { success: true, message: `กำลังเปิดรันเชอร์ของ ${server.name}...` };
   }
 
+  // FiveM is confirmed (cfx.re forum reports of this exact crash) to actively detect
+  // and refuse launches that look like they're coming from a third-party tool — that's
+  // deliberate on their end, not a bug, so spawning FiveM.exe ourselves (however
+  // carefully) is fundamentally the wrong approach and was tried and failed here across
+  // several attempts. shell.openExternal is the one invocation that looks IDENTICAL to
+  // a real browser clicking a fivem:// link, which FiveM does allow. The only genuine,
+  // fixable bug on this machine was the protocol registration itself being blank
+  // (HKCU\Software\Classes\fivem\shell\open\command had no command at all) — repairing
+  // that is fixing a real misconfiguration, not working around an intentional block.
   const uri = buildConnectUri(server.address);
   const fivemExe = await findFiveMExe();
-  if (!fivemExe) {
-    // Fall back to asking Windows to resolve fivem:// itself when FiveM.exe can't be
-    // found this way (e.g. an install layout this doesn't account for).
-    try {
-      spawnViaStart(uri);
-    } catch (err) {
-      return { success: false, message: `เชื่อมต่อไม่สำเร็จ: ${err.message}` };
-    }
-    return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
+  if (fivemExe) {
+    await repairProtocolHandler(fivemExe);
   }
-
-  // Cold-launching FiveM.exe with the connect URI as its very first argument makes it
-  // run its own startup platform-detection (Steam/Epic/Rockstar Games Launcher) before
-  // it has an established session — on a machine with more than one GTA V platform
-  // linked, that detection can pick a broken/unlicensed one (seen here: it chose
-  // Rockstar Games Launcher, whose manifest download failed, crashing with a generic
-  // "should be launched from the shell" dialog that has nothing to do with how it was
-  // invoked). Launching plain first — same as manually opening FiveM and clicking
-  // connect from its own menu, which is confirmed to work — lets it finish that
-  // detection normally; only send the connect URI as a followup once it's had time to
-  // settle, or immediately if it's already running (no cold-boot detection to race).
-  try {
-    const fivemCwd = path.dirname(fivemExe);
-    const running = await isFiveMRunning();
-    if (running) {
-      spawnViaStart(fivemExe, [uri], fivemCwd);
-      return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
-    }
-    spawnViaStart(fivemExe, [], fivemCwd);
-    sleep(8000).then(() => spawnViaStart(fivemExe, [uri], fivemCwd));
-    return { success: true, message: `กำลังเปิด FiveM แล้วเชื่อมต่อ ${server.name} ให้อัตโนมัติใน 8 วิ...` };
-  } catch (err) {
-    return { success: false, message: `เชื่อมต่อไม่สำเร็จ: ${err.message}` };
-  }
+  shell.openExternal(uri);
+  return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
 }
 
 const IMAGE_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };

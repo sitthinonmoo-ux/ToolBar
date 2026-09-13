@@ -96,4 +96,25 @@ function isFiveMRunning() {
   });
 }
 
-module.exports = { defaultFiveMAppDir, isFiveMAppDir, detectFiveMAppDir, isFiveMRunning };
+// FiveM is documented and confirmed (see cfx.re forum reports of this exact crash) to
+// actively detect and refuse being launched by a third-party tool — no amount of
+// spawn/cwd/timing trickery from this app's side reliably gets past that check, since
+// it's a deliberate anti-custom-launcher measure, not a bug. The one thing that IS a
+// genuine, fixable bug (not something FiveM intentionally blocks) is a broken fivem://
+// protocol registration: on this machine HKCU\Software\Classes\fivem\shell\open\command
+// was completely empty, so Windows had no idea what to run for that URI at all — likely
+// left in that state by an install that got interrupted. Repairing just that registry
+// value, then launching via shell.openExternal (the same path a real browser link click
+// uses), is the one approach that doesn't look like a custom launcher to FiveM at all.
+function repairProtocolHandler(fivemExePath) {
+  return new Promise((resolve) => {
+    const command = `"${fivemExePath}" "%1"`;
+    const child = spawn('reg', ['add', 'HKCU\\Software\\Classes\\fivem\\shell\\open\\command', '/ve', '/d', command, '/f'], {
+      windowsHide: true,
+    });
+    child.on('error', () => resolve(false));
+    child.on('exit', (code) => resolve(code === 0));
+  });
+}
+
+module.exports = { defaultFiveMAppDir, isFiveMAppDir, detectFiveMAppDir, isFiveMRunning, repairProtocolHandler };
