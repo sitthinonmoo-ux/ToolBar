@@ -1,9 +1,20 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const os = require('os');
 const { spawn } = require('child_process');
 const { shell } = require('electron');
 const { detectFiveMAppDir, repairProtocolHandler, isFiveMRunning } = require('./fivem');
+const { fetchServerStatus } = require('./serverStatus');
+
+// explorer resolves the target (a fivem:// URI or a .lnk) and starts it as its own child,
+// which is what satisfies FiveM's "launched from the shell or a web browser" check. Its
+// exit code says nothing about that hand-off (explorer routinely returns 1 after a
+// successful one), so there is deliberately nothing to wait on or inspect.
+function openViaExplorer(target) {
+  const child = spawn('explorer.exe', [target], { detached: true, stdio: 'ignore', windowsHide: true });
+  child.unref();
+}
 
 // cwd matters here: a plain double-click from Explorer always runs with the target's
 // own folder as the working directory, but our spawn() never set one — meaning FiveM
@@ -95,15 +106,56 @@ function buildConnectUri(rawAddress) {
 
 // FiveM's own installer creates "FiveM.exe" (the Squirrel-based launcher/updater) as a
 // sibling of the "FiveM.app" data folder, e.g. "F:\Fivem\FiveM.exe" next to
-// "F:\Fivem\FiveM.app\". Finding it directly lets us launch a fivem:// connect URI
-// ourselves instead of depending on Windows having a correctly registered protocol
-// handler for it — a registration that can end up broken (missing shell\open\command)
-// from an install that got interrupted, with no in-app way to detect or repair it.
+// "F:\Fivem\FiveM.app\". Locating it is what makes the protocol registration repairable:
+// that registration can end up broken (an empty shell\open\command, typically from an
+// interrupted install) with no in-app way to detect or fix it, and writing the correct
+// command back needs the exe's real path.
 async function findFiveMExe() {
   const fivemAppDir = await detectFiveMAppDir({ allowScan: false });
   if (!fivemAppDir) return null;
   const candidate = path.join(path.dirname(fivemAppDir), 'FiveM.exe');
   return fs.existsSync(candidate) ? candidate : null;
+}
+
+// FiveM restarts itself right after connecting whenever the client isn't already running
+// the game build and pure level the server demands — the slow part of joining, and it
+// happens on every single connect. Both values are published by the server, and FiveM's
+// own documented shortcut method takes them as launch flags, so asking the server first
+// and starting the client already in the right mode skips the restart entirely.
+//
+// A .lnk is the only shape that can carry those flags AND still satisfy FiveM's
+// "launched from the shell" check: explorer resolves the shortcut and starts FiveM as its
+// own child, so nothing of this app is in the process ancestry. (An earlier attempt at
+// this same idea failed only because it opened the shortcut with shell.openPath, which
+// leaves ToolBar.exe as the parent — the exact thing FiveM rejects.)
+//
+// One fixed filename, rewritten per launch: no temp litter, and nothing to clean up.
+function connectShortcutPath() {
+  return path.join(os.tmpdir(), 'toolbar-fivem-connect.lnk');
+}
+
+function buildLaunchFlags(profile, connectTarget) {
+  const flags = [];
+  if (profile && profile.gameBuild) flags.push(`-b${profile.gameBuild}`);
+  // Level 0 means pure mode is off, which is the client's own default — passing
+  // "-pure_0" would be inventing a flag FiveM doesn't document.
+  if (profile && profile.pureLevel) flags.push(`-pure_${profile.pureLevel}`);
+  flags.push('+connect', connectTarget);
+  return flags;
+}
+
+// Best-effort by design: every failure here (server down, slow, private, no such field)
+// just means launching without the flags, which still works — FiveM falls back to doing
+// its own restart, exactly like before. Never let this stop a launch.
+async function fetchLaunchProfile(address) {
+  try {
+    const status = await fetchServerStatus(address);
+    if (!status || !status.online) return null;
+    if (!status.pureLevel && !status.gameBuild) return null;
+    return { pureLevel: status.pureLevel, gameBuild: status.gameBuild };
+  } catch {
+    return null;
+  }
 }
 
 function splitArgs(argsString, address) {
@@ -142,36 +194,54 @@ async function launchServer(server) {
   const fivemExe = await findFiveMExe();
   const uri = buildConnectUri(server.address);
 
-  // Every attempt at combining "open FiveM" + "connect" into a single cold action has
-  // failed identically (spawn, shell.openPath, shell.openExternal, cmd/start, a
-  // registry-repaired protocol, an official .lnk shortcut with -pure_X, pre-warming
-  // Rockstar Games Launcher, setting SteamAppId — see git history for the full trail).
-  // FiveM's own log traces the crash to right after its internal Rockstar Games
-  // Launcher handshake completes, immediately after a cold boot — something about that
-  // combination it refuses, regardless of invocation mechanism.
+  // Two separate things were wrong here, which is why this took so many attempts.
   //
-  // What IS confirmed reliable, every single time: opening FiveM plain (no connect
-  // argument) on its own, and connecting via shell.openExternal once FiveM is already
-  // running. So this asks for a second Play click instead of ever combining them:
-  // first click opens FiveM plain, second click (once it's up) connects.
-  const running = await isFiveMRunning();
+  // 1. The fivem:// registration was empty (HKCU\Software\Classes\fivem\shell\open\
+  //    command had no value), so Windows had no handler for the URI at all. Repaired
+  //    below, and re-repaired on every launch in case something clobbers it again.
+  //
+  // 2. FiveM refuses a cold boot whose PARENT PROCESS isn't the shell or a browser —
+  //    that's the "This application should be launched directly from the shell or a web
+  //    browser" dialog, and it's the anti-custom-launcher check, not a crash. It is also
+  //    why the mechanism mattered so much: PowerShell's Start-Process on a URI gets
+  //    routed through the shell, so FiveM ends up parented by explorer.exe and launches
+  //    fine, while Electron's shell.openExternal creates the process directly and leaves
+  //    ToolBar.exe as the parent, which FiveM rejects. Both were confirmed by hand on
+  //    the same address, back to back.
+  //
+  // Both fixes live in openViaExplorer, which every launch below goes through.
+  if (fivemExe) await repairProtocolHandler(fivemExe);
 
-  if (running) {
-    if (fivemExe) await repairProtocolHandler(fivemExe);
-    shell.openExternal(uri);
-    return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
+  // The build/pure flags only help on a cold start — they're what the client boots with.
+  // If FiveM is already up, its mode is already fixed and a second FiveM.exe would just
+  // hand off to the running instance anyway, so take the plain URI path there.
+  if (fivemExe && !(await isFiveMRunning())) {
+    const connectTarget = uri.replace(/^fivem:\/\/connect\//i, '');
+    const profile = await fetchLaunchProfile(server.address);
+    if (profile) {
+      try {
+        const lnkPath = connectShortcutPath();
+        const flags = buildLaunchFlags(profile, connectTarget);
+        shell.writeShortcutLink(lnkPath, 'create', {
+          target: fivemExe,
+          args: flags.join(' '),
+          cwd: path.dirname(fivemExe),
+          description: `ToolBar connect: ${server.name}`,
+        });
+        openViaExplorer(lnkPath);
+        const modes = [profile.gameBuild ? `build ${profile.gameBuild}` : null, profile.pureLevel ? `pure ${profile.pureLevel}` : null]
+          .filter(Boolean)
+          .join(' · ');
+        return { success: true, message: `กำลังเชื่อมต่อ ${server.name} (${modes}) — ไม่ต้องรอ FiveM restart` };
+      } catch {
+        // Shortcut creation is the only part that can fail outright; fall through to the
+        // plain URI so a broken .lnk never costs the user the launch itself.
+      }
+    }
   }
 
-  if (!fivemExe) {
-    shell.openExternal(uri);
-    return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
-  }
-
-  shell.openPath(fivemExe);
-  return {
-    success: true,
-    message: `FiveM ยังไม่ได้เปิด — เปิดให้แล้ว รอโหลดเสร็จแล้วกด Play ที่ ${server.name} อีกครั้งเพื่อเชื่อมต่อ`,
-  };
+  openViaExplorer(uri);
+  return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
 }
 
 const IMAGE_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };

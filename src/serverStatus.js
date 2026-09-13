@@ -27,6 +27,22 @@ function stripColorCodes(s) {
   return (s || '').replace(/\^[0-9]/g, '').trim();
 }
 
+// sv_pureLevel (0 = off, 1 = no added files, 2 = no modified files either) and
+// sv_enforceGameBuild are the two things FiveM restarts itself for right after a connect
+// when the client isn't already in the matching mode. Both are published in the same
+// `vars` blob this module already reads, so pulling them out costs nothing extra and lets
+// launchServer start FiveM in the right state to begin with. Anything unexpected becomes
+// null rather than a guess — a bogus value here would turn into a bogus launch flag.
+function parsePureLevel(raw) {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 && n <= 2 ? n : null;
+}
+
+function parseGameBuild(raw) {
+  const s = String(raw ?? '').trim();
+  return /^\d{3,6}$/.test(s) ? s : null;
+}
+
 async function fetchJson(url, timeoutMs = 4000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -55,6 +71,8 @@ async function fetchDirectStatus(host, port) {
     players: Array.isArray(players) ? players.length : 0,
     maxPlayers: Number(vars.sv_maxClients ?? vars.sv_maxclients) || null,
     tags: vars.tags || '',
+    pureLevel: parsePureLevel(vars.sv_pureLevel),
+    gameBuild: parseGameBuild(vars.sv_enforceGameBuild),
     iconDataUri: info.icon ? `data:image/png;base64,${info.icon}` : null,
     endpoint: `${host}:${port}`,
   };
@@ -95,6 +113,8 @@ async function fetchByJoinCode(code) {
     players: Number(d.clients) || 0,
     maxPlayers: Number(d.svMaxclients ?? d.sv_maxclients ?? vars.sv_maxclients) || null,
     tags: vars.tags || '',
+    pureLevel: parsePureLevel(vars.sv_pureLevel),
+    gameBuild: parseGameBuild(vars.sv_enforceGameBuild),
     iconDataUri,
     endpoint: data.EndPoint || null,
   };
