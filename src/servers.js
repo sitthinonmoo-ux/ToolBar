@@ -8,8 +8,18 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function spawnViaStart(target, args = []) {
+// cwd matters here: a plain double-click from Explorer always runs with the target's
+// own folder as the working directory, but our spawn() never set one — meaning FiveM
+// launched via ToolBar could end up with the wrong cwd (wherever Electron's own process
+// happens to be running from) instead of its own install folder. If FiveM resolves its
+// config/profile relative to cwd rather than to its own exe path in some code paths,
+// that alone could explain it silently falling back to defaults (and picking a
+// different, broken game platform) even with zero connect arguments involved. Callers
+// pass cwd explicitly rather than this deriving it — `target` can be a bare URI (the
+// protocol-resolution fallback) where path.dirname() would produce nonsense.
+function spawnViaStart(target, args = [], cwd = undefined) {
   const child = spawn('cmd.exe', ['/c', 'start', '""', target, ...args], {
+    cwd,
     detached: true,
     stdio: 'ignore',
     windowsHide: true,
@@ -125,7 +135,7 @@ async function launchServer(server) {
       // case. Routing through `cmd /c start` invokes the same ShellExecute path a
       // double-click would, while still letting us pass launch arguments (which
       // shell.openPath can't — it takes no args at all).
-      spawnViaStart(launcherPath, args);
+      spawnViaStart(launcherPath, args, path.dirname(launcherPath));
     } catch (err) {
       return { success: false, message: `เปิดรันเชอร์ไม่สำเร็จ: ${err.message}` };
     }
@@ -156,13 +166,14 @@ async function launchServer(server) {
   // detection normally; only send the connect URI as a followup once it's had time to
   // settle, or immediately if it's already running (no cold-boot detection to race).
   try {
+    const fivemCwd = path.dirname(fivemExe);
     const running = await isFiveMRunning();
     if (running) {
-      spawnViaStart(fivemExe, [uri]);
+      spawnViaStart(fivemExe, [uri], fivemCwd);
       return { success: true, message: `กำลังเชื่อมต่อ ${server.name}...` };
     }
-    spawnViaStart(fivemExe);
-    sleep(8000).then(() => spawnViaStart(fivemExe, [uri]));
+    spawnViaStart(fivemExe, [], fivemCwd);
+    sleep(8000).then(() => spawnViaStart(fivemExe, [uri], fivemCwd));
     return { success: true, message: `กำลังเปิด FiveM แล้วเชื่อมต่อ ${server.name} ให้อัตโนมัติใน 8 วิ...` };
   } catch (err) {
     return { success: false, message: `เชื่อมต่อไม่สำเร็จ: ${err.message}` };
