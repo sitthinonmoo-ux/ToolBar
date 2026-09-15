@@ -66,11 +66,37 @@ const APP_CATALOG = [
     iconUrl: simpleIcon('fivem'),
   },
   {
-    id: 'medal',
-    name: 'Medal',
-    wingetId: 'MedalB.V.Medal',
-    description: { th: 'อัดคลิปไฮไลต์เกมอัตโนมัติ แชร์ง่าย', en: 'Auto-records game highlights, easy to share' },
-    iconUrl: localIcon('medal.png'),
+    id: 'nvidia-app',
+    name: 'NVIDIA App',
+    // Msstore-source package (no winget-source listing exists for this one) — its ID
+    // isn't a reverse-DNS name because Microsoft Store IDs are opaque product codes,
+    // but `winget install --id` resolves it fine without needing `--source msstore`.
+    wingetId: 'XP8CLZL93F5Z4P',
+    description: { th: 'อัปเดตไดรเวอร์ GPU, ปรับแต่งเกม, อัด/สตรีมด้วย Shadowplay', en: 'GPU driver updates, game optimization, and Shadowplay recording' },
+    iconUrl: simpleIcon('nvidia'),
+  },
+  {
+    id: 'rockstar-launcher',
+    name: 'Rockstar Games Launcher',
+    wingetId: 'RockstarGames.Launcher',
+    description: { th: 'ตัวจัดการเกม/บัญชี Rockstar เช่น GTA V', en: 'Rockstar\'s game/account manager, needed for titles like GTA V' },
+    iconUrl: simpleIcon('rockstargames'),
+  },
+  {
+    id: 'anydesk',
+    name: 'AnyDesk',
+    wingetId: 'AnyDesk.AnyDesk',
+    description: { th: 'รีโมทเข้าเครื่องจากระยะไกล', en: 'Remote desktop access' },
+    iconUrl: simpleIcon('anydesk'),
+  },
+  {
+    id: 'ghub',
+    name: 'Logitech G HUB',
+    wingetId: 'Logitech.GHUB',
+    // No simpleicons.org entry for this brand — icon extracted from the vendor's own
+    // installer .exe instead of hotlinking an unverified third-party source.
+    description: { th: 'ตั้งค่าเมาส์/คีย์บอร์ด/หูฟัง Logitech G, DPI, ไฟ RGB, มาโคร', en: 'Configures Logitech G mice/keyboards/headsets — DPI, RGB, macros' },
+    iconUrl: localIcon('ghub.png'),
   },
 ];
 

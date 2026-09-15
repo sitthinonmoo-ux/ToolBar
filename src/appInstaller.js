@@ -99,6 +99,12 @@ async function installApp(appId) {
     '--accept-source-agreements',
   ]);
   if (result.code === 0) return { success: true, message: `ติดตั้ง ${app.name} สำเร็จ` };
+  // winget's "install" on an already-installed app tries an upgrade instead, and
+  // returns a non-zero exit code when there's simply no newer version — that's not
+  // a failure, it just means the app is already up to date.
+  if (/no (applicable update|available upgrade|newer package)/i.test(result.stdout)) {
+    return { success: true, message: `${app.name} ติดตั้งอยู่แล้วและเป็นเวอร์ชันล่าสุด` };
+  }
   return {
     success: false,
     message: `ติดตั้ง ${app.name} ไม่สำเร็จ (โค้ด ${result.code}): ${tailMessage(result.stderr || result.stdout) || 'ไม่ทราบสาเหตุ'}`,

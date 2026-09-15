@@ -1,7 +1,7 @@
 {
   "name": "toolbar",
   "productName": "ToolBar",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "description": "Game utility toolbox — ReShade installer, FiveM maintenance, and more via a plugin/card system.",
   "main": "main.js",
   "scripts": {
