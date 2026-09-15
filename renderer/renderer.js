@@ -15,6 +15,7 @@ const viewDashboard = document.getElementById('view-dashboard');
 const viewTools = document.getElementById('view-tools');
 const viewConnect = document.getElementById('view-connect');
 const viewApps = document.getElementById('view-apps');
+const viewDrivers = document.getElementById('view-drivers');
 const healthPanel = document.getElementById('health-panel');
 const nextStepEl = document.getElementById('next-step');
 const themePanel = document.getElementById('theme-panel');
@@ -541,10 +542,12 @@ function showView(category) {
   const isHome = category === 'home';
   const isConnect = category === 'connect';
   const isApps = category === 'apps';
+  const isDrivers = category === 'drivers';
   viewDashboard.classList.toggle('hidden', !isHome);
   viewConnect.classList.toggle('hidden', !isConnect);
   viewApps.classList.toggle('hidden', !isApps);
-  viewTools.classList.toggle('hidden', isHome || isConnect || isApps);
+  viewDrivers.classList.toggle('hidden', !isDrivers);
+  viewTools.classList.toggle('hidden', isHome || isConnect || isApps || isDrivers);
   themePanel.classList.toggle('hidden', category !== 'settings');
   if (isHome) {
     loadHealthCheck();
@@ -552,6 +555,7 @@ function showView(category) {
   }
   else if (isConnect) loadServers();
   else if (isApps) loadApps();
+  else if (isDrivers) loadDrivers();
   else renderCards();
 }
 
@@ -1339,6 +1343,86 @@ function renderAppCards() {
     appsGrid.appendChild(card);
   }
 }
+
+// ---------------- drivers (driver check view) ----------------
+const driversList = document.getElementById('drivers-list');
+const driversCount = document.getElementById('drivers-count');
+let driverScanCache = null;
+let driverScanInFlight = false;
+
+const DRIVER_KIND_RAIL = {
+  missing: 'var(--danger)',
+  fallback: 'var(--accent-1)',
+  other: 'var(--text-dim)',
+};
+
+async function loadDrivers({ force = false } = {}) {
+  if (driverScanInFlight) return;
+  if (driverScanCache && !force) return renderDrivers(driverScanCache);
+  driverScanInFlight = true;
+  driversCount.textContent = t('drivers.subtitle');
+  driversList.innerHTML = `<div class="empty-state">${t('drivers.scanning')}</div>`;
+  try {
+    const result = await window.toolbarApi.scanDrivers();
+    if (!result.success) throw new Error(result.message);
+    driverScanCache = result;
+    renderDrivers(result);
+  } catch (err) {
+    driversList.innerHTML = `<div class="empty-state">${t('drivers.error', err.message)}</div>`;
+    driversCount.textContent = '';
+  } finally {
+    driverScanInFlight = false;
+  }
+}
+
+function renderDrivers(result) {
+  const { issues, scannedDevices } = result;
+  driversCount.textContent = issues.length
+    ? t('drivers.summary', issues.length, scannedDevices)
+    : t('drivers.allClear', scannedDevices);
+  document.getElementById('nav-tag-drivers').textContent = issues.length || '';
+  if (!issues.length) {
+    driversList.innerHTML = `<div class="empty-state"><strong>${t('drivers.none')}</strong><br />${t('drivers.noneHint')}</div>`;
+    return;
+  }
+  driversList.innerHTML = '';
+  for (const issue of issues) {
+    const row = document.createElement('div');
+    row.className = `driver-row kind-${issue.kind}`;
+    row.style.setProperty('--rail', DRIVER_KIND_RAIL[issue.kind]);
+    const badges = [`<span class="driver-badge">${t('drivers.kind.' + issue.kind)}</span>`];
+    if (issue.pnpClass) badges.push(`<span class="tag">${issue.pnpClass}</span>`);
+    if (issue.count > 1) badges.push(`<span class="tag">${t('drivers.multiple', issue.count)}</span>`);
+    if (issue.problemCode) badges.push(`<span class="tag mono">${t('drivers.problemCode', issue.problemCode)}</span>`);
+    const findLabel = issue.action
+      ? issue.action.type === 'vendor'
+        ? t('drivers.openVendor', issue.action.vendor)
+        : t('drivers.search')
+      : '';
+    row.innerHTML = `
+      <div class="driver-row-main">
+        <h3>${issue.name}</h3>
+        <div class="driver-badges">${badges.join('')}</div>
+        <p class="driver-hint">${t('drivers.hint.' + issue.kind)}</p>
+        <code class="driver-hwid mono">${issue.hardwareId}</code>
+      </div>
+      <div class="driver-row-actions">
+        ${issue.action ? `<button class="btn btn-primary btn-small" data-role="find">${findLabel}</button>` : ''}
+        <button class="btn btn-ghost btn-small" data-role="copy">${t('drivers.copyId')}</button>
+      </div>
+    `;
+    const findBtn = row.querySelector('[data-role="find"]');
+    if (findBtn) findBtn.addEventListener('click', () => window.toolbarApi.openExternal(issue.action.url));
+    row.querySelector('[data-role="copy"]').addEventListener('click', async (e) => {
+      await navigator.clipboard.writeText(issue.hardwareId);
+      e.target.textContent = t('drivers.copied');
+      setTimeout(() => { e.target.textContent = t('drivers.copyId'); }, 1500);
+    });
+    driversList.appendChild(row);
+  }
+}
+
+document.getElementById('btn-scan-drivers').addEventListener('click', () => loadDrivers({ force: true }));
 
 // ---------------- HUD chrome: particle field + targeting reticle + panel tilt ----------------
 function initHudChrome() {

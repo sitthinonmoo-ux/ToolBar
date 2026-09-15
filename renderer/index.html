@@ -55,6 +55,11 @@
           <span class="drag-handle" data-icon="grip"></span>
           <span class="nav-icon" data-icon="nav-apps"></span> <span data-i18n="nav.apps"></span>
         </button>
+        <button class="nav-item" data-category="drivers" draggable="true">
+          <span class="drag-handle" data-icon="grip"></span>
+          <span class="nav-icon" data-icon="nav-drivers"></span> <span data-i18n="nav.drivers"></span>
+          <span class="nav-tag mono" id="nav-tag-drivers"></span>
+        </button>
         <button class="nav-item" data-category="graphics" draggable="true">
           <span class="drag-handle" data-icon="grip"></span>
           <span class="nav-icon" data-icon="nav-graphics"></span> <span data-i18n="nav.graphics"></span>
@@ -144,6 +149,19 @@
           </div>
         </header>
         <section class="card-grid" id="apps-grid"></section>
+      </div>
+
+      <div class="view-drivers hidden" id="view-drivers">
+        <header class="content-header">
+          <div>
+            <h1 data-i18n="drivers.title"></h1>
+            <p class="subtitle" id="drivers-count"></p>
+          </div>
+          <div class="content-header-actions">
+            <button class="btn btn-primary" id="btn-scan-drivers" data-i18n="drivers.rescan"></button>
+          </div>
+        </header>
+        <section class="driver-rows" id="drivers-list"></section>
       </div>
 
       <div class="view-tools hidden" id="view-tools">

@@ -10,6 +10,7 @@ const { exportSettings, importSettings } = require('./src/exportImport');
 const { APP_CATALOG } = require('./src/appCatalog');
 const { checkInstalledAll, installApp } = require('./src/appInstaller');
 const { getStats } = require('./src/sysMonitor');
+const { scanDrivers } = require('./src/driverScan');
 const { setupAutoUpdate, autoUpdater } = require('./src/autoUpdate');
 const debugLog = require('./src/debugLog');
 
@@ -217,6 +218,14 @@ ipcMain.handle('plugins:run', async (_event, pluginId, params) => {
 ipcMain.handle('health:check', () => runHealthCheck());
 
 ipcMain.handle('sysmonitor:stats', () => getStats());
+
+ipcMain.handle('drivers:scan', async () => {
+  try {
+    return { success: true, ...(await scanDrivers()) };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+});
 
 ipcMain.handle('shell:open-external', (_event, url) => {
   if (/^https?:\/\//i.test(url)) shell.openExternal(url);

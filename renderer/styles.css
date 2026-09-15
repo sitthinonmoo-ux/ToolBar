@@ -285,6 +285,25 @@ input, textarea, select { cursor: auto !important; }
 }
 @keyframes linescan { 0% { left: -30%; } 100% { left: 100%; } }
 
+.driver-rows { display: flex; flex-direction: column; gap: 8px; }
+.driver-row {
+  --rail: var(--accent-2);
+  position: relative; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 13px;
+  padding: 13px 16px; background: var(--card-bg); border: 1px solid var(--card-border); overflow: hidden;
+  clip-path: polygon(var(--notch) 0, 100% 0, 100% calc(100% - var(--notch)), calc(100% - var(--notch)) 100%, 0 100%, 0 var(--notch));
+}
+.driver-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--rail); box-shadow: 0 0 8px var(--rail); }
+.driver-row h3 { font-size: 12.5px; font-weight: 600; margin: 0 0 6px; }
+.driver-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.driver-badge {
+  font-size: 9.5px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .06em;
+  padding: 2px 7px; color: var(--rail); border: 1px solid var(--rail); background: color-mix(in srgb, var(--rail) 12%, transparent);
+}
+.driver-hint { font-size: 11px; color: var(--text-dim); margin: 0 0 6px; line-height: 1.5; }
+.driver-hwid { display: block; font-size: 10px; color: var(--text-dim); word-break: break-all; opacity: .8; }
+.driver-row-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.driver-row-actions .btn { white-space: nowrap; }
+
 .server-rows { display: flex; flex-direction: column; gap: 8px; }
 .server-row {
   --mx: 50%; --my: 50%;

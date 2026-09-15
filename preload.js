@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('toolbarApi', {
   importSettings: () => ipcRenderer.invoke('settings:import'),
   listApps: () => ipcRenderer.invoke('apps:list'),
   getSysStats: () => ipcRenderer.invoke('sysmonitor:stats'),
+  scanDrivers: () => ipcRenderer.invoke('drivers:scan'),
   checkAppsInstalled: () => ipcRenderer.invoke('apps:checkInstalled'),
   installApp: (appId) => ipcRenderer.invoke('apps:install', appId),
   launchServer: (server) => ipcRenderer.invoke('servers:launch', server),

@@ -108,6 +108,10 @@ const ICONS = {
     <path d="M4 9l1.5-5h13L20 9"/><path d="M4 9h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9z"/><path d="M9 13a3 3 0 0 0 6 0"/>
   </svg>`,
 
+  'nav-drivers': `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M10 2v3M14 2v3M10 19v3M14 19v3M2 10h3M2 14h3M19 10h3M19 14h3"/>
+  </svg>`,
+
   'tool-generic': `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
     <rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 12h6"/><path d="M12 9v6"/>
   </svg>`,
@@ -115,7 +119,7 @@ const ICONS = {
 
 // Category -> nav icon key, and a generic fallback for any plugin.icon that
 // doesn't match a known key (keeps the UI from silently rendering nothing).
-const CATEGORY_ICON = { all: 'nav-all', graphics: 'nav-graphics', maintenance: 'nav-maintenance', connect: 'nav-connect', settings: 'nav-settings', apps: 'nav-apps' };
+const CATEGORY_ICON = { all: 'nav-all', graphics: 'nav-graphics', maintenance: 'nav-maintenance', connect: 'nav-connect', settings: 'nav-settings', apps: 'nav-apps', drivers: 'nav-drivers' };
 const FALLBACK_ICON = 'nav-graphics';
 
 function iconMarkup(key) {
