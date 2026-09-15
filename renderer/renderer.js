@@ -549,6 +549,9 @@ function showView(category) {
   viewDrivers.classList.toggle('hidden', !isDrivers);
   viewTools.classList.toggle('hidden', isHome || isConnect || isApps || isDrivers);
   themePanel.classList.toggle('hidden', category !== 'settings');
+  // Without this a tall view leaves the shared scroll container part-way down, so the
+  // next view opens mid-content with its own header scrolled off the top.
+  document.querySelector('.content').scrollTop = 0;
   if (isHome) {
     loadHealthCheck();
     updateSysmonStats();
