@@ -6,6 +6,7 @@ const { spawn } = require('child_process');
 const { shell } = require('electron');
 const { detectFiveMAppDir, repairProtocolHandler, isFiveMRunning } = require('./fivem');
 const { fetchServerStatus } = require('./serverStatus');
+const { startAutoPlay } = require('./launcherAutoPlay');
 
 // explorer resolves the target (a fivem:// URI or a .lnk) and starts it as its own child,
 // which is what satisfies FiveM's "launched from the shell or a web browser" check. Its
@@ -184,9 +185,16 @@ async function launchServer(server) {
       // case. Routing through `cmd /c start` invokes the same ShellExecute path a
       // double-click would, while still letting us pass launch arguments (which
       // shell.openPath can't — it takes no args at all).
-      spawnViaStart(launcherPath, args, path.dirname(launcherPath));
+      // Without args, go through explorer like a real double-click: NW.js launchers
+      // (LUV) started via `cmd start` from ToolBar either never appear or open as a
+      // blank grey window with no content to click.
+      if (args.length === 0) openViaExplorer(launcherPath);
+      else spawnViaStart(launcherPath, args, path.dirname(launcherPath));
     } catch (err) {
       return { success: false, message: `เปิดรันเชอร์ไม่สำเร็จ: ${err.message}` };
+    }
+    if (startAutoPlay(launcherPath)) {
+      return { success: true, message: `กำลังเปิดรันเชอร์ของ ${server.name} แล้วกด PLAY ให้อัตโนมัติ...` };
     }
     return { success: true, message: `กำลังเปิดรันเชอร์ของ ${server.name}...` };
   }
