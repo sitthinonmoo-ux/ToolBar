@@ -4,6 +4,7 @@ const fs = require('fs');
 const { loadPlugins } = require('./src/pluginManager');
 const { listBackups, restoreBackup } = require('./src/backup');
 const { runHealthCheck } = require('./src/healthcheck');
+const { getHardware, getHomeGeo, getServerGeo } = require('./src/holoData');
 const { listServers, upsertServer, deleteServer, reorderServers, launchServer, readImageAsDataUri } = require('./src/servers');
 const { fetchServerStatus } = require('./src/serverStatus');
 const { exportSettings, importSettings } = require('./src/exportImport');
@@ -218,6 +219,10 @@ ipcMain.handle('plugins:run', async (_event, pluginId, params) => {
 ipcMain.handle('health:check', () => runHealthCheck());
 
 ipcMain.handle('sysmonitor:stats', () => getStats());
+
+ipcMain.handle('holo:hardware', () => getHardware());
+ipcMain.handle('holo:homeGeo', () => getHomeGeo());
+ipcMain.handle('holo:serverGeo', (_event, address, endpoint) => getServerGeo(address, endpoint));
 
 ipcMain.handle('drivers:scan', async () => {
   try {

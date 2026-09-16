@@ -235,41 +235,124 @@ input, textarea, select { cursor: auto !important; }
   border: 1px dashed var(--card-border); grid-column: 1 / -1;
 }
 
-/* ---------------- dashboard hero: orbital readiness ring ---------------- */
-.hero-panel {
-  position: relative; display: grid; grid-template-columns: auto 1fr; gap: 26px;
-  padding: 20px 24px; background: var(--card-bg); border: 1px solid var(--card-border); margin-bottom: 18px;
-  align-items: center;
+/* ---------------- dashboard hero: holograms ---------------- */
+.holo-hero { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 14px; margin-bottom: 18px; }
+.holo-stage {
+  position: relative; min-height: 380px; overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 70%, color-mix(in srgb, var(--accent-1) 14%, transparent), transparent 65%),
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent-2) 4%, transparent) 0 1px, transparent 1px 4px),
+    var(--bg-elevated);
+  border: 1px solid var(--card-border);
   clip-path: polygon(var(--notch) 0, 100% 0, 100% calc(100% - var(--notch)), calc(100% - var(--notch)) 100%, 0 100%, 0 var(--notch));
 }
-
-.orbital { position: relative; width: 128px; height: 128px; flex-shrink: 0; }
-.orbital svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.ring-outer { fill: none; stroke: var(--card-border); stroke-width: 1; stroke-dasharray: 2 6; transform-origin: 50% 50%; animation: spin 46s linear infinite; }
-.ring-mid { fill: none; stroke: var(--accent-2); stroke-opacity: .5; stroke-width: 1.2; stroke-dasharray: 26 8; transform-origin: 50% 50%; animation: spinrev 16s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes spinrev { to { transform: rotate(-360deg); } }
-.ring-tick { stroke: var(--card-border); stroke-width: 1.3; }
-.ring-tick.on { stroke: var(--accent-2); }
-.ring-track { fill: none; stroke: var(--card-border); stroke-width: 5.5; }
-.ring-val {
-  fill: none; stroke: url(#ringGrad); stroke-width: 5.5; stroke-linecap: round;
-  transform: rotate(-90deg); transform-origin: 50% 50%; stroke-dasharray: 214; stroke-dashoffset: 214;
-  transition: stroke-dashoffset 1s cubic-bezier(.16, 1, .3, 1);
-  filter: drop-shadow(0 0 4px rgba(47, 227, 255, .6));
+.holo-stage::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, transparent 0 48%, color-mix(in srgb, var(--accent-2) 7%, transparent) 50%, transparent 52% 100%);
+  background-size: 100% 260%; animation: holoflicker 5.5s linear infinite;
 }
-.ring-sweep { transform-origin: 50% 50%; animation: sweep 4s linear infinite; }
-@keyframes sweep { to { transform: rotate(360deg); } }
-.orbital-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.orbital-num { font-weight: 600; font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums; text-shadow: 0 0 12px rgba(47, 227, 255, .5); }
-.orbital-den { font-size: 9px; color: var(--accent-2); letter-spacing: .5px; margin-top: 4px; }
+@keyframes holoflicker { from { background-position: 0 -120%; } to { background-position: 0 120%; } }
+.holo-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.holo-stage canvas.pointing { filter: brightness(1.08); }
+.holo-hud {
+  position: absolute; top: 10px; left: 12px; font-size: 10px; letter-spacing: .12em; color: var(--accent-2);
+  display: flex; align-items: center; gap: 7px; pointer-events: none; text-shadow: 0 0 8px var(--accent-2);
+}
+.holo-hud span:last-child { color: var(--text-dim); text-shadow: none; letter-spacing: .04em; }
+.holo-hud-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); animation: statuspulse 1.6s ease-in-out infinite; }
+.holo-hint { position: absolute; right: 12px; top: 11px; font-size: 9.5px; color: var(--text-dim); pointer-events: none; }
 
-.next-step { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0; }
-.next-step-title { font-family: var(--font-display); font-weight: 700; font-size: 15px; margin: 0; }
-.next-step-title::before { content: "// "; color: var(--accent-2); font-family: var(--font-mono); font-weight: 400; }
-.next-step-desc { font-size: 12.5px; color: var(--text-secondary); margin: 0; }
-.next-step.done .next-step-title::before { content: "[ OK ] "; color: var(--success); }
-.next-step .btn { flex-shrink: 0; }
+.holo-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.holo-side .sysmon-grid { grid-template-columns: 1fr; gap: 10px; flex: 1; }
+.holo-side .sysmon-card { padding: 12px 14px; }
+.holo-side .sysmon-ring { width: 54px; height: 54px; }
+
+.readiness-chip {
+  display: flex; align-items: center; gap: 9px; padding: 11px 14px; font-size: 12px; color: var(--text-secondary);
+  background: var(--card-bg); border: 1px solid var(--card-border); min-height: 18px;
+  clip-path: polygon(var(--notch) 0, 100% 0, 100% calc(100% - var(--notch)), calc(100% - var(--notch)) 100%, 0 100%, 0 var(--notch));
+}
+.readiness-chip b { margin-left: auto; font-size: 15px; color: var(--warning); }
+.readiness-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); box-shadow: 0 0 8px var(--warning); }
+.readiness-chip.ok b { color: var(--success); }
+.readiness-chip.ok .readiness-dot { background: var(--success); box-shadow: 0 0 8px var(--success); }
+
+.globe-split { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
+.globe-stage { min-height: 360px; }
+.globe-split .server-rows { align-self: start; }
+.globe-split .server-row { grid-template-columns: 36px minmax(0, 1fr) auto; grid-template-areas: 'avatar name play' 'avatar stat play'; row-gap: 3px; }
+.globe-split .server-row-avatar { grid-area: avatar; }
+.globe-split .server-row > div:nth-child(2) { grid-area: name; min-width: 0; }
+.globe-split .server-row-name, .globe-split .server-row-addr { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.globe-split .server-row-stat { grid-area: stat; font-size: 10.5px; }
+.globe-split .server-row-play { grid-area: play; }
+
+.next-step {
+  display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; margin-bottom: 8px;
+  background: var(--warning-soft); border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
+}
+.next-step-title { font-family: var(--font-display); font-weight: 700; font-size: 14px; margin: 0; }
+.next-step-title::before { content: "// "; color: var(--warning); font-family: var(--font-mono); font-weight: 400; }
+.next-step-desc { font-size: 12px; color: var(--text-secondary); margin: 0; }
+
+@media (max-width: 980px) {
+  .holo-hero, .globe-split { grid-template-columns: 1fr; }
+  .holo-side .sysmon-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* layered floating panels opened from a hologram */
+.holo-panels { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.holo-panels.closing { opacity: 0; transition: opacity .18s; }
+.holo-link { position: absolute; left: 0; top: 0; overflow: visible; }
+.holo-link polyline {
+  fill: none; stroke: var(--accent-2); stroke-width: 1.2; stroke-dasharray: 5 4;
+  filter: drop-shadow(0 0 4px var(--accent-2)); animation: holodash .8s linear infinite;
+}
+.holo-link circle { fill: var(--accent-2); filter: drop-shadow(0 0 6px var(--accent-2)); }
+@keyframes holodash { to { stroke-dashoffset: -18; } }
+.holo-stack { position: absolute; display: flex; flex-direction: column; gap: 6px; pointer-events: auto; perspective: 700px; }
+.holo-block {
+  position: relative; padding: 10px 12px;
+  margin-left: calc(var(--i) * 8px); margin-right: calc(var(--i) * -8px);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent-2) 13%, transparent), color-mix(in srgb, var(--bg) 82%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent-2) 45%, transparent);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent-2) 16%, transparent), inset 0 0 22px color-mix(in srgb, var(--accent-2) 7%, transparent);
+  backdrop-filter: blur(6px);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  opacity: 0; transform-origin: left center;
+  animation: holounfold .42s cubic-bezier(.16, 1, .3, 1) forwards; animation-delay: calc(var(--i) * 70ms);
+}
+.holo-stack.from-right .holo-block { margin-left: calc(var(--i) * -8px); margin-right: calc(var(--i) * 8px); transform-origin: right center; }
+.holo-block::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent-2) 6%, transparent) 0 1px, transparent 1px 3px);
+}
+@keyframes holounfold {
+  0% { opacity: 0; transform: rotateY(-38deg) scaleY(.2); filter: brightness(2.2); }
+  60% { opacity: 1; filter: brightness(1.4); }
+  100% { opacity: 1; transform: none; filter: none; }
+}
+.holo-kicker { font-size: 9px; letter-spacing: .12em; color: var(--accent-2); opacity: .85; }
+.holo-title { font-family: var(--font-display); font-weight: 700; font-size: 16px; margin-top: 2px; padding-right: 20px; text-shadow: 0 0 10px color-mix(in srgb, var(--accent-2) 50%, transparent); }
+.holo-sub { font-size: 10px; color: var(--text-secondary); margin-top: 2px; overflow-wrap: anywhere; }
+.holo-close {
+  position: absolute; top: 6px; right: 8px; width: 22px; height: 22px; z-index: 1;
+  background: transparent; border: 1px solid color-mix(in srgb, var(--accent-2) 40%, transparent);
+  color: var(--accent-2); font-size: 15px; line-height: 1; cursor: pointer;
+}
+.holo-close:hover { background: var(--accent-2); color: #01141c; }
+.holo-sec-title { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-2); margin-bottom: 6px; }
+.holo-row { display: flex; justify-content: space-between; gap: 12px; font-size: 11.5px; color: var(--text-secondary); padding: 2px 0; }
+.holo-row b { color: var(--text-primary); font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.holo-row b.good { color: var(--success); }
+.holo-row b.warn { color: var(--warning); }
+.holo-row b.bad { color: var(--danger); }
+.holo-bar { height: 4px; background: color-mix(in srgb, var(--accent-2) 12%, transparent); margin: 2px 0 7px; }
+.holo-bar i { display: block; height: 100%; background: var(--accent-2); box-shadow: 0 0 8px var(--accent-2); transition: width .6s; }
+.holo-bar.warn i { background: var(--warning); box-shadow: 0 0 8px var(--warning); }
+.holo-bar.bad i { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+.holo-block-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.holo-block-actions .btn { position: relative; z-index: 1; }
 
 /* ---------------- dashboard sections ---------------- */
 .dash-section { margin-bottom: 18px; }

@@ -164,7 +164,6 @@ document.getElementById('btn-lang').addEventListener('click', () => {
   applyStaticI18n();
   if (activeCategory === 'home') {
     if (lastHealth) renderHealthCheck(lastHealth);
-    renderDashboardGraphics();
     renderDashboardServers();
   } else if (activeCategory === 'connect') {
     renderServerCards();
@@ -220,18 +219,6 @@ function renderCards() {
 }
 
 // ---------------- dashboard: graphics shortcuts + server rows ----------------
-function renderDashboardGraphics() {
-  const dashGrid = document.getElementById('dash-graphics-grid');
-  const dashCount = document.getElementById('dash-graphics-count');
-  if (!dashGrid) return;
-  const graphicsPlugins = allPlugins.filter((p) => p.category === 'graphics');
-  dashGrid.innerHTML = '';
-  for (const plugin of graphicsPlugins) {
-    dashGrid.appendChild(buildToolCard(plugin));
-  }
-  if (dashCount) dashCount.textContent = t('header.count', graphicsPlugins.length);
-}
-
 function buildServerRow(server) {
   const row = document.createElement('div');
   row.className = 'server-row';
@@ -296,12 +283,7 @@ function renderDashboardServers() {
 }
 
 // ---------------- dashboard / health check ----------------
-function openPluginById(pluginId) {
-  const plugin = allPlugins.find((p) => p.id === pluginId);
-  if (plugin) openModal(plugin);
-}
-
-function healthRow({ ok, label, detail, actionPluginId, quickAction }) {
+function healthRow({ ok, label, detail }) {
   const row = document.createElement('div');
   row.className = `health-row ${ok ? 'ok' : 'bad'}`;
   row.innerHTML = `
@@ -310,151 +292,45 @@ function healthRow({ ok, label, detail, actionPluginId, quickAction }) {
       <div class="health-row-label">${label}</div>
       <div class="health-row-detail">${detail}</div>
     </div>
-    <div class="health-row-actions">
-      ${quickAction ? `<button class="btn ${quickAction.danger ? 'btn-danger' : 'btn-primary'} btn-small" data-role="quick">${quickAction.label}</button>` : ''}
-      ${!ok && actionPluginId ? `<button class="btn btn-ghost btn-small" data-role="goto">${t('health.goTo')}</button>` : ''}
-    </div>
   `;
-  const gotoBtn = row.querySelector('[data-role="goto"]');
-  if (gotoBtn) gotoBtn.addEventListener('click', () => openPluginById(actionPluginId));
-  const quickBtn = row.querySelector('[data-role="quick"]');
-  if (quickBtn) {
-    quickBtn.addEventListener('click', async () => {
-      const original = quickBtn.textContent;
-      quickBtn.disabled = true;
-      quickBtn.textContent = quickAction.loadingLabel;
-      try {
-        await quickAction.onClick();
-      } finally {
-        quickBtn.disabled = false;
-        quickBtn.textContent = original;
-      }
-    });
-  }
   return row;
 }
 
-// One-click install/uninstall for ReShade, driven entirely by what the health check
-// already found — no modal, no manual file picking. Falls back to telling the user
-// what's missing if GTA V or FiveM weren't auto-detected.
-async function quickReshadeAction(action) {
-  const gameExe = lastHealth && lastHealth.gta5.path;
-  const fivemAppDir = lastHealth && lastHealth.fivem.path;
-  if (!gameExe || !fivemAppDir) {
-    toast(t('health.quickNeedsBoth'), 'error');
-    return;
-  }
-  const pluginId = action === 'install' ? 'reshade-installer' : 'reshade-uninstaller';
-  const params =
-    action === 'install' ? { gameExe, api: 'dxgi', forFiveM: true, fivemAppDir } : { gameExe, fivemAppDir };
-  try {
-    const result = await window.toolbarApi.run(pluginId, params);
-    toast(result.message, result.success ? 'success' : 'error');
-  } catch (err) {
-    toast(err.message, 'error');
-  } finally {
-    await loadHealthCheck({ silent: true });
-  }
-}
-
+// Home only tracks whether the game itself is set up; ReShade status lives on its own
+// cards in the Graphics tab.
 function renderNextStep(h) {
-  let key = 'allDone';
-  let actionPluginId = null;
-  if (!h.gta5.ok || !h.fivem.ok) {
-    key = 'needGame';
-  } else if (!h.reshadeInstalled.ok) {
-    key = 'installReshade';
-    actionPluginId = 'reshade-installer';
-  } else if (!h.reshadeConfirmed.ok) {
-    key = 'confirmReshade';
-    // fivem-reshade-addon (the manual F8-confirm fallback) was removed — the install
-    // card already writes this same acknowledgment line automatically, so re-opening
-    // it is the useful action if the check somehow still shows unconfirmed.
-    actionPluginId = 'reshade-installer';
-  }
-  nextStepEl.classList.toggle('done', key === 'allDone');
-  nextStepEl.innerHTML = `
-    <div>
-      <p class="next-step-title">${t(`nextstep.${key}.title`)}</p>
-      <p class="next-step-desc">${t(`nextstep.${key}.desc`)}</p>
-    </div>
-    ${actionPluginId ? `<button class="btn btn-primary">${t('nextstep.action')}</button>` : ''}
-  `;
-  if (actionPluginId) {
-    nextStepEl.querySelector('button').addEventListener('click', () => openPluginById(actionPluginId));
-  }
+  const missing = !h.gta5.ok || !h.fivem.ok;
+  nextStepEl.classList.toggle('hidden', !missing);
+  nextStepEl.innerHTML = missing
+    ? `<div><p class="next-step-title">${t('nextstep.needGame.title')}</p><p class="next-step-desc">${t('nextstep.needGame.desc')}</p></div>`
+    : '';
 }
 
 function renderHealthCheck(h) {
   healthPanel.innerHTML = '';
-  healthPanel.appendChild(
-    healthRow({
-      ok: h.gta5.ok,
-      label: t('health.gta5'),
-      detail: h.gta5.ok ? t('health.found', h.gta5.path) : t('health.notFound'),
-    })
-  );
-  healthPanel.appendChild(
-    healthRow({
-      ok: h.fivem.ok,
-      label: t('health.fivem'),
-      detail: h.fivem.ok ? t('health.found', h.fivem.path) : t('health.notFound'),
-    })
-  );
-  healthPanel.appendChild(
-    healthRow({
-      ok: h.reshadeInstalled.ok,
-      label: t('health.reshadeInstalled'),
-      detail: h.reshadeInstalled.ok ? t('health.done') : t('health.notDone'),
-      actionPluginId: 'reshade-installer',
-      quickAction: h.reshadeInstalled.ok
-        ? {
-            label: t('health.quickUninstall'),
-            loadingLabel: t('health.quickUninstalling'),
-            danger: true,
-            onClick: () => quickReshadeAction('uninstall'),
-          }
-        : {
-            label: t('health.quickInstall'),
-            loadingLabel: t('health.quickInstalling'),
-            onClick: () => quickReshadeAction('install'),
-          },
-    })
-  );
-  healthPanel.appendChild(
-    healthRow({
-      ok: h.reshadeConfirmed.ok,
-      label: t('health.reshadeConfirmed'),
-      detail: h.reshadeConfirmed.ok ? t('health.done') : t('health.notDone'),
-      actionPluginId: 'reshade-installer',
-    })
-  );
+  for (const key of ['gta5', 'fivem']) {
+    healthPanel.appendChild(
+      healthRow({
+        ok: h[key].ok,
+        label: t(`health.${key}`),
+        detail: h[key].ok ? t('health.found', h[key].path) : t('health.notFound'),
+      })
+    );
+  }
   renderNextStep(h);
-  updateReadinessRing(h);
+  updateReadiness(h);
 }
 
-// Drives the orbital ring's fill, tick highlighting, and center count from the
-// actual health check result — this is real state, not a decorative animation.
-function updateReadinessRing(h) {
-  const checks = [h.gta5.ok, h.fivem.ok, h.reshadeInstalled.ok, h.reshadeConfirmed.ok];
-  const total = checks.length;
+function updateReadiness(h) {
+  const checks = [h.gta5.ok, h.fivem.ok];
   const done = checks.filter(Boolean).length;
-  const ratio = done / total;
-
-  const ringVal = document.getElementById('ring-val');
-  if (ringVal) {
-    const circumference = 214;
-    ringVal.style.strokeDashoffset = String(circumference - circumference * ratio);
+  const chip = document.getElementById('readiness-chip');
+  if (chip) {
+    chip.classList.toggle('ok', done === checks.length);
+    chip.innerHTML = `<span class="readiness-dot"></span><span>${t('holo.readiness')}</span><b class="mono">${done}/${checks.length}</b>`;
   }
-  const ringNum = document.getElementById('ring-num');
-  if (ringNum) ringNum.textContent = `${done}/${total}`;
-
-  const ticks = document.querySelectorAll('#ring-ticks .ring-tick');
-  const onCount = Math.round(ratio * ticks.length);
-  ticks.forEach((tick, i) => tick.classList.toggle('on', i < onCount));
-
   const navTagHome = document.getElementById('nav-tag-home');
-  if (navTagHome) navTagHome.textContent = `${done}/${total}`;
+  if (navTagHome) navTagHome.textContent = `${done}/${checks.length}`;
 }
 
 async function loadHealthCheck({ silent = false } = {}) {
@@ -522,6 +398,7 @@ async function updateSysmonStats() {
   buildSysmonGauges();
   try {
     const stats = await window.toolbarApi.getSysStats();
+    if (pcHolo) pcHolo.setStats(stats);
     setSysmonGauge('cpu', stats.cpu, `${stats.cpu}%`, 'utilization');
     setSysmonGauge('ram', stats.ram.usedPercent, `${stats.ram.usedPercent}%`, `${stats.ram.usedGB.toFixed(1)} / ${stats.ram.totalGB.toFixed(1)} GB`);
     if (stats.gpu) {
@@ -567,7 +444,6 @@ async function loadPlugins() {
     allPlugins = await window.toolbarApi.listPlugins();
     pluginCount.textContent = t('header.count', allPlugins.length);
     renderCards();
-    renderDashboardGraphics();
   } catch (err) {
     console.error('loadPlugins failed', err);
     pluginCount.textContent = t('header.loadError', err.message);
@@ -1065,15 +941,20 @@ function applyServerStatus(statusEl, status) {
   }
 }
 
-async function checkServerStatus(address, statusEl) {
+// Caches the in-flight promise too, so the card, the Home row and the globe asking for
+// the same server at once share one request.
+function getServerStatusCached(address) {
   const cached = serverStatusCache.get(address);
-  if (cached && Date.now() - cached.at < SERVER_STATUS_TTL_MS) {
-    applyServerStatus(statusEl, cached.status);
-    return;
-  }
+  if (cached && Date.now() - cached.at < SERVER_STATUS_TTL_MS) return cached.promise;
+  const promise = window.toolbarApi.serverStatus(address);
+  serverStatusCache.set(address, { promise, at: Date.now() });
+  promise.catch(() => serverStatusCache.delete(address));
+  return promise;
+}
+
+async function checkServerStatus(address, statusEl) {
   try {
-    const status = await window.toolbarApi.serverStatus(address);
-    serverStatusCache.set(address, { status, at: Date.now() });
+    const status = await getServerStatusCached(address);
     if (!statusEl.isConnected) return; // card may have been re-rendered/removed by now
     applyServerStatus(statusEl, status);
   } catch {
@@ -1093,6 +974,7 @@ async function loadServers({ silent = false } = {}) {
     allServers = await window.toolbarApi.listServers();
     renderServerCards();
     renderDashboardServers();
+    if (serverGlobe) serverGlobe.setServers(allServers);
   } catch (err) {
     if (!silent) serverGrid.innerHTML = `<div class="empty-state">${err.message}</div>`;
   }
@@ -1523,7 +1405,7 @@ function initHudChrome() {
   document.addEventListener('mousemove', (e) => {
     mouseX = e.clientX;
     mouseY = e.clientY;
-    overHot = !!e.target.closest('.btn, .tool-card, .nav-item, .health-row-actions button, .server-card-edit, [data-role="play"]');
+    overHot = !!e.target.closest('.btn, .tool-card, .nav-item, .server-card-edit, [data-role="play"], canvas.pointing, .holo-close');
     const px = mouseX / window.innerWidth - 0.5;
     const py = mouseY / window.innerHeight - 0.5;
     targetTiltY = px * 4.5;
@@ -1562,28 +1444,30 @@ function initHudChrome() {
   loop();
 }
 
-// Builds the 28 tick marks around the readiness ring once; how many read "on" (cyan)
-// vs. dim is updated per health check in renderHealthCheck below.
-function buildRingTicks() {
-  const g = document.getElementById('ring-ticks');
-  if (!g) return;
-  for (let i = 0; i < 28; i++) {
-    const a = (i / 28) * Math.PI * 2 - Math.PI / 2;
-    const r1 = 38.5;
-    const r2 = i % 7 === 0 ? 35.2 : 36.6;
-    const x1 = 50 + Math.cos(a) * r1;
-    const y1 = 50 + Math.sin(a) * r1;
-    const x2 = 50 + Math.cos(a) * r2;
-    const y2 = 50 + Math.sin(a) * r2;
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', x1);
-    line.setAttribute('y1', y1);
-    line.setAttribute('x2', x2);
-    line.setAttribute('y2', y2);
-    line.setAttribute('class', 'ring-tick');
-    line.dataset.index = i;
-    g.appendChild(line);
-  }
+// ---------------- holograms (Home) ----------------
+let pcHolo = null;
+let serverGlobe = null;
+
+function launchWithToast(server) {
+  window.toolbarApi
+    .launchServer(server)
+    .then((result) => toast(result.message, result.success ? 'success' : 'error'))
+    .catch((err) => toast(err.message, 'error'));
+}
+
+function initHolograms() {
+  pcHolo = Holo.createPcHologram(document.getElementById('pc-holo-stage'), {
+    getHardware: () => window.toolbarApi.getHardware(),
+  });
+  serverGlobe = Holo.createServerGlobe(document.getElementById('globe-holo-stage'), {
+    resolveStatus: getServerStatusCached,
+    getServerGeo: (address, endpoint) => window.toolbarApi.getServerGeo(address, endpoint),
+    getHomeGeo: () => window.toolbarApi.getHomeGeo(),
+    onPlay: launchWithToast,
+  });
+  window.toolbarApi.getHardware().then((hw) => {
+    document.getElementById('pc-holo-host').textContent = `// ${hw.hostname}`;
+  }).catch(() => {});
 }
 
 // ---------------- init ----------------
@@ -1596,8 +1480,8 @@ mountIcons();
 applyStaticI18n();
 renderThemePicker();
 positionNavIndicator(navList.querySelector('.nav-item.active'));
-buildRingTicks();
 initHudChrome();
+initHolograms();
 document.querySelector('.app-shell').classList.add('glitch');
 loadPlugins();
 loadHealthCheck();

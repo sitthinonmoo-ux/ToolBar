@@ -86,43 +86,34 @@
             <p class="subtitle" data-i18n="dashboard.subtitle"></p>
           </div>
         </header>
-        <div class="hero-panel" id="hero-panel">
-          <div class="orbital">
-            <svg viewBox="0 0 100 100">
-              <defs>
-                <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--accent-1)"/><stop offset="1" stop-color="var(--accent-2)"/></linearGradient>
-                <radialGradient id="sweepGrad"><stop offset="0" stop-color="var(--accent-2)" stop-opacity=".95"/><stop offset="1" stop-color="var(--accent-2)" stop-opacity="0"/></radialGradient>
-              </defs>
-              <circle class="ring-outer" cx="50" cy="50" r="47"/>
-              <circle class="ring-mid" cx="50" cy="50" r="41"/>
-              <g id="ring-ticks"></g>
-              <circle class="ring-track" cx="50" cy="50" r="34"/>
-              <circle class="ring-val" id="ring-val" cx="50" cy="50" r="34"/>
-              <g class="ring-sweep"><circle cx="50" cy="12.5" r="2.2" fill="url(#sweepGrad)"/></g>
-            </svg>
-            <div class="orbital-label"><div class="orbital-num mono" id="ring-num">0/0</div><div class="orbital-den" data-i18n="health.ready"></div></div>
+        <div class="holo-hero">
+          <div class="holo-stage pc-stage" id="pc-holo-stage">
+            <canvas></canvas>
+            <div class="holo-hud mono"><span class="holo-hud-dot"></span>SYS.CORE <span id="pc-holo-host"></span></div>
+            <div class="holo-hint mono" data-i18n="holo.pc.hint"></div>
           </div>
-          <div class="next-step" id="next-step"></div>
-        </div>
-
-        <div class="dash-section" style="--rail: var(--accent-2)">
-          <div class="section-head"><span class="section-title mono" data-i18n="sysmon.title"></span><span class="section-line"></span></div>
-          <div class="sysmon-grid" id="sysmon-grid"></div>
-        </div>
-
-        <div class="dash-section" style="--rail: var(--accent-2)">
-          <div class="section-head"><span class="section-title mono" data-i18n="dashboard.systemSection"></span><span class="section-line"></span></div>
-          <div class="health-panel" id="health-panel"></div>
-        </div>
-
-        <div class="dash-section" style="--rail: var(--accent-2)">
-          <div class="section-head"><span class="section-title mono" data-i18n="nav.graphics"></span><span class="section-line"></span><span class="section-count mono" id="dash-graphics-count"></span></div>
-          <div class="card-grid" id="dash-graphics-grid"></div>
+          <aside class="holo-side">
+            <div class="readiness-chip" id="readiness-chip"></div>
+            <div class="sysmon-grid" id="sysmon-grid"></div>
+          </aside>
         </div>
 
         <div class="dash-section" style="--rail: var(--accent-1)">
           <div class="section-head"><span class="section-title mono" data-i18n="nav.connect"></span><span class="section-line"></span><span class="section-count mono" id="dash-servers-count"></span></div>
-          <div class="server-rows" id="dash-servers-rows"></div>
+          <div class="globe-split">
+            <div class="holo-stage globe-stage" id="globe-holo-stage">
+              <canvas></canvas>
+              <div class="holo-hud mono"><span class="holo-hud-dot"></span>NET.MAP</div>
+              <div class="holo-hint mono" data-i18n="holo.globe.hint"></div>
+            </div>
+            <div class="server-rows" id="dash-servers-rows"></div>
+          </div>
+        </div>
+
+        <div class="dash-section" style="--rail: var(--accent-2)">
+          <div class="section-head"><span class="section-title mono" data-i18n="dashboard.systemSection"></span><span class="section-line"></span></div>
+          <div class="next-step hidden" id="next-step"></div>
+          <div class="health-panel" id="health-panel"></div>
         </div>
       </div>
 
@@ -318,6 +309,7 @@
 
   <script src="icons.js"></script>
   <script src="i18n.js"></script>
+  <script src="holo.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
