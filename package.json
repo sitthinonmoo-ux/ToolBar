@@ -1,7 +1,7 @@
 {
   "name": "toolbar",
   "productName": "ToolBar",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "description": "Game utility toolbox — ReShade installer, FiveM maintenance, and more via a plugin/card system.",
   "main": "main.js",
   "scripts": {
@@ -42,11 +42,20 @@
     "directories": {
       "output": "dist"
     },
-    "publish": {
-      "provider": "github",
-      "owner": "sitthinonmoo-ux",
-      "repo": "toolbar"
-    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "sitthinonmoo-ux",
+        "repo": "ToolBar-releases",
+        "releaseType": "release"
+      },
+      {
+        "provider": "github",
+        "owner": "sitthinonmoo-ux",
+        "repo": "toolbar",
+        "releaseType": "release"
+      }
+    ],
     "win": {
       "target": "nsis",
       "icon": "icon.ico"
