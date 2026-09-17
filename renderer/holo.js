@@ -24,6 +24,11 @@ const Holo = (() => {
   }
   const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${clamp(a, 0, 1).toFixed(3)})`;
 
+  // Effects-saver mode: stages drop to ~15fps and skip purely decorative layers so the
+  // Home tab doesn't compete with a running game for CPU/GPU time.
+  let lite = false;
+  const LITE_FRAME_MS = 66;
+
   function readPalette() {
     const cs = getComputedStyle(document.documentElement);
     const v = (name, fb) => hexRgb(cs.getPropertyValue(name) || fb);
@@ -67,7 +72,11 @@ const Holo = (() => {
         running = false;
         return;
       }
-      const dt = last ? Math.min(50, t - last) : 16;
+      if (lite && last && t - last < LITE_FRAME_MS) {
+        requestAnimationFrame(frame);
+        return;
+      }
+      const dt = last ? Math.min(lite ? 100 : 50, t - last) : 16;
       last = t;
       if (t - palAt > 500) {
         st.pal = readPalette();
@@ -105,6 +114,39 @@ const Holo = (() => {
     setTimeout(() => old.remove(), 180);
   }
 
+  // `sec.spark` is a recent-history array (0–100) drawn as a sparkline under the bar.
+  function sparkMarkup(values, tone) {
+    if (!values || values.length < 2) return '';
+    const n = values.length;
+    const pts = values.map((v, i) => `${((i / (n - 1)) * 100).toFixed(2)},${(26 - (clamp(v, 0, 100) / 100) * 24).toFixed(2)}`).join(' ');
+    return `<svg class="holo-spark ${tone || ''}" viewBox="0 0 100 28" preserveAspectRatio="none">`
+      + `<polygon points="0,28 ${pts} 100,28" /><polyline points="${pts}" /></svg>`;
+  }
+
+  function sectionInner(sec) {
+    const rows = sec.rows
+      .filter((r) => r && r[1] !== undefined && r[1] !== null && r[1] !== '')
+      .map(([k, v, tone]) => `<div class="holo-row"><span>${esc(k)}</span><b class="mono ${tone || ''}">${esc(v)}</b></div>`)
+      .join('');
+    const bar = sec.bar != null
+      ? `<div class="holo-bar ${sec.barTone || ''}"><i style="width:${clamp(sec.bar, 0, 100)}%"></i></div>`
+      : '';
+    const spark = sec.spark ? sparkMarkup(sec.spark, sec.barTone) : '';
+    const sparkCap = spark && sec.sparkCaption ? `<div class="holo-spark-cap mono">${esc(sec.sparkCaption)}</div>` : '';
+    return `<div class="holo-sec-title mono">${esc(sec.title)}</div>${bar}${spark}${sparkCap}${rows}`;
+  }
+
+  // Re-fills an open panel's sections in place (no unfold animation replay) so live
+  // values and sparklines keep moving while the panel stays open.
+  function refreshPanel(host, spec) {
+    const blocks = host.querySelectorAll('.holo-panels:not(.closing) .holo-block[data-sec]');
+    const sections = spec.sections || [];
+    if (!blocks.length || blocks.length !== sections.length) return;
+    blocks.forEach((el, i) => {
+      el.innerHTML = sectionInner(sections[i]);
+    });
+  }
+
   function openPanel(host, anchor, spec) {
     host.querySelectorAll('.holo-panels').forEach((el) => el.remove());
     const hostW = host.clientWidth;
@@ -123,14 +165,7 @@ const Holo = (() => {
         <button class="holo-close" data-role="close" aria-label="close">×</button>
       </div>`);
     for (const sec of spec.sections || []) {
-      const rows = sec.rows
-        .filter((r) => r && r[1] !== undefined && r[1] !== null && r[1] !== '')
-        .map(([k, v, tone]) => `<div class="holo-row"><span>${esc(k)}</span><b class="mono ${tone || ''}">${esc(v)}</b></div>`)
-        .join('');
-      const bar = sec.bar != null
-        ? `<div class="holo-bar ${sec.barTone || ''}"><i style="width:${clamp(sec.bar, 0, 100)}%"></i></div>`
-        : '';
-      blocks.push(`<div class="holo-block"><div class="holo-sec-title mono">${esc(sec.title)}</div>${bar}${rows}</div>`);
+      blocks.push(`<div class="holo-block" data-sec>${sectionInner(sec)}</div>`);
     }
     if (spec.actions && spec.actions.length) {
       blocks.push(`<div class="holo-block holo-block-actions">${spec.actions
@@ -206,10 +241,17 @@ const Holo = (() => {
   }
 
   // ---------------- PC hologram ----------------
-  function createPcHologram(host, { getHardware }) {
+  // `mini` is the sidebar version: same model and heat colours, no callouts or clicks.
+  function createPcHologram(host, { getHardware, mini = false }) {
     const canvas = host.querySelector('canvas');
+    if (mini) canvas.style.pointerEvents = 'none';
     let hw = null;
     let stats = null;
+    // Recent samples per gauge for the panel sparklines. Polling runs every 2–6s
+    // depending on tab and effects mode, so the caption uses real sample times.
+    const HISTORY_LEN = 90;
+    const hist = { cpu: [], ram: [], gpu: [] };
+    const histAt = [];
     let hover = null;
     let selected = null;
     let parts = [];
@@ -219,22 +261,31 @@ const Holo = (() => {
     let bladeAngle = 0;
     let drag = null;
     let idleSince = 0;
+    // exploded view: 0 = assembled, 1 = parts pulled apart (double-click toggles)
+    let explode = 0;
+    let explodeGoal = 0;
+    let clickTimer = null;
+    // pulled-apart view snaps back on its own after this long without the pointer on it
+    const EXPLODE_IDLE_MS = 8000;
+    let touchedAt = 0;
+    // smoothed 0–1 heat per part, so colours glide instead of jumping every poll
+    const heat = {};
     const motes = Array.from({ length: 26 }, () => [(Math.random() - 0.5) * 1.8, -2.2 + Math.random() * 4.4, (Math.random() - 0.5) * 4.2, 0.004 + Math.random() * 0.01]);
 
     function buildParts() {
       const driveCount = hw && hw.drives ? Math.min(4, hw.drives.length) : 2;
       const drives = Array.from({ length: Math.max(1, driveCount) }, (_, i) => box(0.25, -1.55 - i * 0.2, 1.5, 1.15, 0.13, 0.75));
       parts = [
-        { id: 'case', shapes: [box(0, 0, 0, 2.0, 4.4, 4.6)], fans: [
+        { id: 'case', off: [0, 0, 0], shapes: [box(0, 0, 0, 2.0, 4.4, 4.6)], fans: [
           ...[1.25, 0, -1.25].map((y) => ({ c: [0.05, y, 2.3], axis: 'z', r: 0.52 })),
           { c: [-0.1, 1.3, -2.3], axis: 'z', r: 0.44 },
         ] },
-        { id: 'psu', shapes: [box(0, -1.78, -0.72, 1.92, 0.78, 2.5)] },
-        { id: 'board', selectable: true, shapes: [box(-0.93, 0.35, -0.3, 0.05, 3.3, 3.5)] },
-        { id: 'cpu', selectable: true, shapes: [box(-0.5, 1.28, -0.6, 0.74, 0.95, 0.95)], fans: [{ c: [-0.5, 1.28, -0.1], axis: 'z', r: 0.38 }] },
-        { id: 'ram', selectable: true, shapes: [0, 1, 2, 3].map((i) => box(-0.74, 1.28, 0.22 + i * 0.14, 0.34, 0.95, 0.05)) },
-        { id: 'gpu', selectable: true, shapes: [box(-0.3, -0.08, -0.35, 1.1, 0.52, 3.1)], fans: [-1.25, -0.35, 0.55].map((z) => ({ c: [-0.3, -0.35, z], axis: 'y', r: 0.37 })) },
-        { id: 'storage', selectable: true, shapes: drives },
+        { id: 'psu', off: [0, -0.5, -3.0], shapes: [box(0, -1.78, -0.72, 1.92, 0.78, 2.5)] },
+        { id: 'board', off: [-1.7, 0.1, 0], selectable: true, shapes: [box(-0.93, 0.35, -0.3, 0.05, 3.3, 3.5)] },
+        { id: 'cpu', off: [-0.5, 2.0, -1.7], selectable: true, shapes: [box(-0.5, 1.28, -0.6, 0.74, 0.95, 0.95)], fans: [{ c: [-0.5, 1.28, -0.1], axis: 'z', r: 0.38 }] },
+        { id: 'ram', off: [-0.5, 1.8, 1.8], selectable: true, shapes: [0, 1, 2, 3].map((i) => box(-0.74, 1.28, 0.22 + i * 0.14, 0.34, 0.95, 0.05)) },
+        { id: 'gpu', off: [2.1, -0.2, 0.2], selectable: true, shapes: [box(-0.3, -0.08, -0.35, 1.1, 0.52, 3.1)], fans: [-1.25, -0.35, 0.55].map((z) => ({ c: [-0.3, -0.35, z], axis: 'y', r: 0.37 })) },
+        { id: 'storage', off: [0.9, -0.6, 3.0], selectable: true, shapes: drives },
       ];
       for (const p of parts) {
         p.center = p.shapes.reduce((acc, s) => [acc[0] + s.c[0], acc[1] + s.c[1], acc[2] + s.c[2]], [0, 0, 0]).map((v) => v / p.shapes.length);
@@ -252,15 +303,19 @@ const Holo = (() => {
       }
       return 0;
     }
+    // 0–1 "how hot": load 60→90% (usage for RAM/drives), and for the GPU also its
+    // temperature 55→83°C, whichever is worse — the same points the gauges warn at.
+    function heatTarget(id) {
+      let h = clamp((level(id) - 60) / 30, 0, 1);
+      if (id === 'gpu' && stats && stats.gpu) h = Math.max(h, clamp((stats.gpu.tempC - 55) / 28, 0, 1));
+      return h;
+    }
+    function heatColor(h, pal) {
+      const mix = (a, b, f) => [0, 1, 2].map((i) => Math.round(lerp(a[i], b[i], f)));
+      return h < 0.6 ? mix(pal.a2, pal.warn, h / 0.6) : mix(pal.warn, pal.danger, (h - 0.6) / 0.4);
+    }
     function tone(id, pal) {
-      if (id === 'gpu' && stats && stats.gpu) {
-        if (stats.gpu.tempC >= 83) return pal.danger;
-        if (stats.gpu.tempC >= 72) return pal.warn;
-      }
-      const l = level(id);
-      if (l >= 90) return pal.danger;
-      if (l >= 75) return pal.warn;
-      return pal.a2;
+      return heatColor(heat[id] ?? heatTarget(id), pal);
     }
 
     const partName = (id) => t(`holo.part.${id}`);
@@ -281,27 +336,37 @@ const Holo = (() => {
       return '';
     }
 
+    function sparkOf(key) {
+      const values = hist[key];
+      if (values.length < 2) return {};
+      const secs = Math.round((histAt[histAt.length - 1] - histAt[histAt.length - values.length]) / 1000);
+      return {
+        spark: values,
+        sparkCaption: t('holo.spark', secs, Math.round(Math.max(...values))),
+      };
+    }
+
     function panelFor(id) {
       const gb = (v) => `${v.toFixed(v >= 100 ? 0 : 1)} GB`;
       const L = level(id);
       const base = { kicker: `SYS.${id.toUpperCase()} // ${hw ? hw.hostname : ''}`, title: partName(id) };
       if (id === 'cpu') {
         return { ...base, subtitle: hw && hw.cpuModel, sections: [
-          { title: t('holo.sec.live'), bar: L, barTone: L >= 75 ? 'warn' : '', rows: [[t('holo.load'), `${L}%`]] },
+          { title: t('holo.sec.live'), bar: L, barTone: L >= 75 ? 'warn' : '', ...sparkOf('cpu'), rows: [[t('holo.load'), `${L}%`]] },
           { title: t('holo.sec.spec'), rows: [[t('holo.threads'), hw && hw.threads]] },
         ] };
       }
       if (id === 'gpu') {
         const g = stats && stats.gpu;
         return { ...base, subtitle: (hw && hw.gpuModel) || t('sysmon.noGpu'), sections: g ? [
-          { title: t('holo.sec.live'), bar: g.utilPercent, rows: [[t('holo.load'), `${g.utilPercent}%`], [t('holo.temp'), `${g.tempC}°C`, g.tempC >= 83 ? 'bad' : g.tempC >= 72 ? 'warn' : 'good']] },
+          { title: t('holo.sec.live'), bar: g.utilPercent, ...sparkOf('gpu'), rows: [[t('holo.load'), `${g.utilPercent}%`], [t('holo.temp'), `${g.tempC}°C`, g.tempC >= 83 ? 'bad' : g.tempC >= 72 ? 'warn' : 'good']] },
           { title: 'VRAM', bar: (g.memUsedMB / g.memTotalMB) * 100, rows: [[t('holo.used'), gb(g.memUsedMB / 1024)], [t('holo.total'), gb(g.memTotalMB / 1024)]] },
         ] : [] };
       }
       if (id === 'ram') {
         const r = stats && stats.ram;
         return { ...base, subtitle: hw && `${Math.round(hw.ramGB)} GB`, sections: r ? [
-          { title: t('holo.sec.live'), bar: r.usedPercent, barTone: r.usedPercent >= 75 ? 'warn' : '', rows: [[t('holo.used'), gb(r.usedGB)], [t('holo.free'), gb(r.totalGB - r.usedGB)], [t('holo.total'), gb(r.totalGB)]] },
+          { title: t('holo.sec.live'), bar: r.usedPercent, barTone: r.usedPercent >= 75 ? 'warn' : '', ...sparkOf('ram'), rows: [[t('holo.used'), gb(r.usedGB)], [t('holo.free'), gb(r.totalGB - r.usedGB)], [t('holo.total'), gb(r.totalGB)]] },
         ] : [] };
       }
       if (id === 'storage') {
@@ -318,30 +383,76 @@ const Holo = (() => {
     function select(id, anchor) {
       selected = id;
       const p = parts.find((x) => x.id === id);
-      goal.tx = p.center[0];
-      goal.ty = p.center[1];
-      goal.tz = p.center[2];
+      goal.tx = p.center[0] + p.off[0] * explodeGoal;
+      goal.ty = p.center[1] + p.off[1] * explodeGoal;
+      goal.tz = p.center[2] + p.off[2] * explodeGoal;
       goal.dist = { board: 9.5, gpu: 7.2, storage: 6.2 }[id] || 5.6;
       openPanel(host, anchor, { ...panelFor(id), onClose: deselect });
     }
     function deselect() {
       selected = null;
-      goal.tx = goal.ty = goal.tz = 0;
-      goal.dist = 12.5;
+      goal.tx = goal.tz = 0;
+      goal.ty = explodeGoal ? 0.5 : 0;
+      goal.dist = explodeGoal ? 15.5 : 12.5;
       idleSince = performance.now();
+      touchedAt = idleSince;
     }
 
     const hitboxes = new Map();
 
+    // Airflow streaks in case space, front intake (+z) to rear exhaust (-z):
+    // [x, y, z, speed jitter, intake height]. Intake fans sit at y = 1.25 / 0 / -1.25,
+    // the exhaust at y = 1.3, so the air bends upward as it crosses (hot air rises).
+    function airY(p, z) {
+      const u = clamp((2.3 - z) / 4.6, 0, 1);
+      return lerp(p[4], 1.3 + (p[4] - 1.3) * 0.25, u * u);
+    }
+    function spawnAir(p, anywhere) {
+      p[0] = (Math.random() - 0.5) * 1.5;
+      p[4] = [1.25, 0, -1.25][Math.floor(Math.random() * 3)] + (Math.random() - 0.5) * 0.8;
+      p[2] = anywhere ? -2.2 + Math.random() * 4.4 : 2.25;
+      p[3] = 0.7 + Math.random() * 0.6;
+      p[1] = airY(p, p[2]);
+      return p;
+    }
+    const air = Array.from({ length: 46 }, () => spawnAir([], true));
+
+    function drawAirflow(ctx, P, pal, k) {
+      const load = stats ? Math.max(stats.cpu || 0, (stats.gpu && stats.gpu.utilPercent) || 0) / 100 : 0.1;
+      const speed = 0.012 + load * 0.05;
+      const warm = Math.max(heat.cpu || 0, heat.gpu || 0);
+      ctx.lineWidth = 1.2;
+      for (const p of air) {
+        p[2] -= speed * p[3] * k;
+        if (p[2] < -2.3) {
+          spawnAir(p, false);
+          continue;
+        }
+        p[1] = airY(p, p[2]);
+        const tail = P([p[0], airY(p, p[2] + 0.35), p[2] + 0.35]);
+        const head = P([p[0], p[1], p[2]]);
+        const u = clamp((2.3 - p[2]) / 4.6, 0, 1);
+        // cool on the way in, picks up the parts' heat on the way out
+        ctx.strokeStyle = rgba(heatColor(warm * u, pal), (0.25 + load * 0.45) * Math.sin(u * Math.PI));
+        ctx.beginPath();
+        ctx.moveTo(tail[0], tail[1]);
+        ctx.lineTo(head[0], head[1]);
+        ctx.stroke();
+      }
+    }
+
     function draw(ctx, st, dt, now) {
       const { w, h, pal } = st;
       const cx = w * 0.5;
-      const cy = h * 0.54;
-      const f = h * 1.45;
+      const cy = h * (mini ? 0.5 : 0.54);
+      const f = h * (mini ? 1.7 : 1.45);
       const k = dt / 16;
 
       if (!drag && !selected && now - idleSince > 1500) cam.yaw += 0.0035 * k;
       for (const key of ['dist', 'tx', 'ty', 'tz']) cam[key] = lerp(cam[key], goal[key], 0.07 * k);
+      if (explodeGoal && !selected && !drag && now - touchedAt > EXPLODE_IDLE_MS) setExplode(0);
+      explode = Math.abs(explode - explodeGoal) < 0.001 ? explodeGoal : lerp(explode, explodeGoal, 0.08 * k);
+      for (const part of parts) heat[part.id] = lerp(heat[part.id] ?? heatTarget(part.id), heatTarget(part.id), 0.04 * k);
       const load = stats ? stats.cpu / 100 : 0.1;
       bladeAngle += (0.05 + load * 0.35) * k;
       spin += 0.01 * k;
@@ -386,7 +497,11 @@ const Holo = (() => {
 
       hitboxes.clear();
       const pulse = 0.5 + 0.5 * Math.sin(now / 420);
+      if (!lite && explode < 0.5) drawAirflow(ctx, P, pal, k);
+
       for (const part of parts) {
+        const off = part.off.map((v) => v * explode);
+        const PP = explode ? (pt) => P([pt[0] + off[0], pt[1] + off[1], pt[2] + off[2]]) : P;
         const isHot = hover === part.id || selected === part.id;
         const dimmed = selected && selected !== part.id && part.id !== 'case';
         const col = part.id === 'case' || part.id === 'psu' ? pal.a1 : tone(part.id, pal);
@@ -394,7 +509,7 @@ const Holo = (() => {
         const lvl = level(part.id) / 100;
 
         for (const shape of part.shapes) {
-          const pv = shape.v.map(P);
+          const pv = shape.v.map(PP);
           for (const q of pv) {
             minX = Math.min(minX, q[0]); maxX = Math.max(maxX, q[0]);
             minY = Math.min(minY, q[1]); maxY = Math.max(maxY, q[1]);
@@ -422,12 +537,12 @@ const Holo = (() => {
         for (const fan of part.fans || []) {
           ctx.beginPath();
           for (let i = 0; i <= 28; i++) {
-            const q = P(circlePoint(fan.c, fan.axis, fan.r, (i / 28) * TAU));
+            const q = PP(circlePoint(fan.c, fan.axis, fan.r, (i / 28) * TAU));
             i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]);
           }
-          const cq = P(fan.c);
+          const cq = PP(fan.c);
           for (let b = 0; b < 5; b++) {
-            const q = P(circlePoint(fan.c, fan.axis, fan.r * 0.85, bladeAngle + (b / 5) * TAU));
+            const q = PP(circlePoint(fan.c, fan.axis, fan.r * 0.85, bladeAngle + (b / 5) * TAU));
             ctx.moveTo(cq[0], cq[1]);
             ctx.lineTo(q[0], q[1]);
           }
@@ -437,34 +552,47 @@ const Holo = (() => {
         }
 
         if (part.selectable) {
-          hitboxes.set(part.id, { minX, minY, maxX, maxY, area: (maxX - minX) * (maxY - minY), center: P(part.center) });
+          hitboxes.set(part.id, { minX, minY, maxX, maxY, area: (maxX - minX) * (maxY - minY), center: PP(part.center) });
+        }
+        // exploded view: name tag above every part
+        if (explode > 0.6 && !selected && part.id !== 'case') {
+          const c = PP(part.center);
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.font = `600 10px ${MONO}`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = rgba(col, (explode - 0.6) / 0.4);
+          ctx.fillText(partName(part.id).toUpperCase(), c[0], part.id === 'board' ? maxY + 16 : minY - 8);
+          ctx.textAlign = 'left';
+          ctx.globalCompositeOperation = 'lighter';
         }
       }
 
-      // scan plane sweeping the case
-      const scanY = -2.2 + ((now / 3800) % 1) * 4.4;
-      const sc = [[-1, scanY, -2.3], [1, scanY, -2.3], [1, scanY, 2.3], [-1, scanY, 2.3]].map(P);
-      ctx.beginPath();
-      sc.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])));
-      ctx.closePath();
-      ctx.fillStyle = rgba(pal.a2, 0.05);
-      ctx.fill();
-      ctx.strokeStyle = rgba(pal.a2, 0.5);
-      ctx.stroke();
+      // scan plane sweeping the case + rising motes (decorative only)
+      if (!lite) {
+        const scanY = -2.2 + ((now / 3800) % 1) * 4.4;
+        const sc = [[-1, scanY, -2.3], [1, scanY, -2.3], [1, scanY, 2.3], [-1, scanY, 2.3]].map(P);
+        ctx.beginPath();
+        sc.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])));
+        ctx.closePath();
+        ctx.fillStyle = rgba(pal.a2, 0.05);
+        ctx.fill();
+        ctx.strokeStyle = rgba(pal.a2, 0.5);
+        ctx.stroke();
 
-      ctx.fillStyle = rgba(pal.a2, 0.7);
-      ctx.beginPath();
-      for (const m of motes) {
-        m[1] += m[3] * k;
-        if (m[1] > 2.2) m[1] = -2.2;
-        const q = P(m);
-        ctx.moveTo(q[0] + 1, q[1]);
-        ctx.arc(q[0], q[1], 1, 0, TAU);
+        ctx.fillStyle = rgba(pal.a2, 0.7);
+        ctx.beginPath();
+        for (const m of motes) {
+          m[1] += m[3] * k;
+          if (m[1] > 2.2) m[1] = -2.2;
+          const q = P(m);
+          ctx.moveTo(q[0] + 1, q[1]);
+          ctx.arc(q[0], q[1], 1, 0, TAU);
+        }
+        ctx.fill();
       }
-      ctx.fill();
 
       ctx.globalCompositeOperation = 'source-over';
-      if (!selected) drawCallouts(ctx, w, h, pal);
+      if (!mini && !selected && explode < 0.3) drawCallouts(ctx, w, h, pal, now);
     }
 
     const CALLOUTS = [
@@ -473,7 +601,27 @@ const Holo = (() => {
       { id: 'gpu', side: 'l', y: 0.66 },
       { id: 'storage', side: 'r', y: 0.66 },
     ];
-    function drawCallouts(ctx, w, h, pal) {
+    // Point `u` (0–1) of the way along a polyline, by length.
+    function alongPath(pts, u) {
+      const lens = [];
+      let total = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+        lens.push(l);
+        total += l;
+      }
+      let d = u * total;
+      for (let i = 0; i < lens.length; i++) {
+        if (d <= lens[i] || i === lens.length - 1) {
+          const f = lens[i] ? clamp(d / lens[i], 0, 1) : 0;
+          return [lerp(pts[i][0], pts[i + 1][0], f), lerp(pts[i][1], pts[i + 1][1], f)];
+        }
+        d -= lens[i];
+      }
+      return pts[0];
+    }
+
+    function drawCallouts(ctx, w, h, pal, now) {
       const pad = 14;
       const boxW = Math.min(190, w * 0.27);
       for (const c of CALLOUTS) {
@@ -498,6 +646,27 @@ const Holo = (() => {
         ctx.beginPath();
         ctx.arc(ax, ay, 2.6, 0, TAU);
         ctx.fill();
+
+        // data stream: packets flow from the part out to its readout, faster under load
+        if (!lite) {
+          const path = [[ax, ay], [edgeX + (c.side === 'l' ? 18 : -18), ly + 8], [edgeX, ly + 8]];
+          const speed = 0.00018 + (level(c.id) / 100) * 0.0009;
+          ctx.globalCompositeOperation = 'lighter';
+          for (let i = 0; i < 3; i++) {
+            const u = (now * speed + i / 3) % 1;
+            const p = alongPath(path, u);
+            const fade = Math.sin(u * Math.PI);
+            const gr = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], 5);
+            gr.addColorStop(0, rgba(pal.text, 0.9 * fade));
+            gr.addColorStop(0.35, rgba(col, 0.7 * fade));
+            gr.addColorStop(1, rgba(col, 0));
+            ctx.fillStyle = gr;
+            ctx.beginPath();
+            ctx.arc(p[0], p[1], 5, 0, TAU);
+            ctx.fill();
+          }
+          ctx.globalCompositeOperation = 'source-over';
+        }
 
         ctx.textAlign = c.side === 'l' ? 'left' : 'right';
         const tx = c.side === 'l' ? lx : lx + boxW;
@@ -536,14 +705,27 @@ const Holo = (() => {
       idleSince = performance.now();
       if (!wasClick || e.target !== canvas) return;
       const pt = localPoint(canvas, e);
-      const id = pick(pt);
-      if (id) {
-        const hb = hitboxes.get(id);
-        select(id, { x: hb.center[0], y: hb.center[1] });
-      } else if (selected) {
-        closePanel(host);
-        deselect();
-      }
+      // Held back briefly so the first click of a double-click doesn't open a panel.
+      clearTimeout(clickTimer);
+      clickTimer = setTimeout(() => {
+        const id = pick(pt);
+        if (id) {
+          const hb = hitboxes.get(id);
+          select(id, { x: hb.center[0], y: hb.center[1] });
+        } else if (selected) {
+          closePanel(host);
+          deselect();
+        }
+      }, 220);
+    });
+    function setExplode(v) {
+      explodeGoal = v;
+      deselect();
+    }
+    canvas.addEventListener('dblclick', () => {
+      clearTimeout(clickTimer);
+      if (selected) closePanel(host);
+      setExplode(explodeGoal ? 0 : 1);
     });
     window.addEventListener('mousemove', (e) => {
       if (drag) {
@@ -557,6 +739,7 @@ const Holo = (() => {
       }
     });
     canvas.addEventListener('mousemove', (e) => {
+      touchedAt = performance.now();
       if (drag) return;
       hover = pick(localPoint(canvas, e));
       canvas.classList.toggle('pointing', !!hover);
@@ -585,6 +768,17 @@ const Holo = (() => {
     return {
       setStats(s) {
         stats = s;
+        const push = (key, v) => {
+          if (typeof v !== 'number') return;
+          hist[key].push(v);
+          if (hist[key].length > HISTORY_LEN) hist[key].shift();
+        };
+        histAt.push(Date.now());
+        if (histAt.length > HISTORY_LEN) histAt.shift();
+        push('cpu', s && s.cpu);
+        push('ram', s && s.ram && s.ram.usedPercent);
+        push('gpu', s && s.gpu && s.gpu.utilPercent);
+        if (selected) refreshPanel(host, panelFor(selected));
       },
       refreshHardware,
     };
@@ -921,7 +1115,7 @@ const Holo = (() => {
           ctx.lineWidth = pingWidth(bestPing === 9999 ? null : bestPing);
           ctx.stroke();
 
-          list.forEach((s, si) => {
+          if (!lite) list.forEach((s, si) => {
             const ms = geo.get(s.id).pingMs;
             const speed = ms == null ? 0.00012 : 0.0009 / Math.max(1, Math.sqrt(ms / 8));
             const tt = ((now * speed) + si / list.length + gi * 0.13) % 1;
@@ -1071,5 +1265,11 @@ const Holo = (() => {
     };
   }
 
-  return { createPcHologram, createServerGlobe };
+  return {
+    createPcHologram,
+    createServerGlobe,
+    setLite(v) {
+      lite = !!v;
+    },
+  };
 })();

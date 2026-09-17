@@ -1,6 +1,8 @@
 // Hand-authored line icon set (Feather-style: 24x24 viewbox, stroke=currentColor).
 // Replaces emoji glyphs so the app looks consistent across every machine's font/emoji set.
 const ICONS = {
+  // Isometric wireframe cube, like the Home hologram: the lit top face and the bright
+  // front edge read as a "T".
   logo: `<svg viewBox="0 0 40 40" width="20" height="20" aria-hidden="true">
     <defs>
       <linearGradient id="toolbarLogoGrad" x1="0" y1="0" x2="1" y2="1">
@@ -8,13 +10,15 @@ const ICONS = {
         <stop offset="1" style="stop-color:var(--accent-2)"/>
       </linearGradient>
     </defs>
-    <polygon points="20,9 31,20 20,31 9,20" fill="url(#toolbarLogoGrad)"/>
-    <g stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none">
-      <path d="M4 11.5V4.5H11"/>
-      <path d="M29 4.5H36V11.5"/>
-      <path d="M36 28.5V35.5H29"/>
-      <path d="M11 35.5H4V28.5"/>
-    </g>
+    <ellipse cx="20" cy="34.5" rx="18.5" ry="4.6" fill="none" style="stroke:var(--accent-2)" stroke-width="1.2" opacity=".7"/>
+    <polygon points="5,11.5 35,11.5 35,28.5 20,37 5,28.5" style="fill:var(--bg-elevated)"/>
+    <polygon points="5,11.5 20,20 20,37 5,28.5" style="fill:var(--accent-1)" opacity=".2"/>
+    <polygon points="35,11.5 20,20 20,37 35,28.5" style="fill:var(--accent-2)" opacity=".08"/>
+    <path d="M5 18 20 26.5M5 24 20 32.5M35 18 20 26.5M35 24 20 32.5" style="stroke:var(--accent-2)" stroke-width=".8" opacity=".45"/>
+    <polygon points="20,3 35,11.5 20,20 5,11.5" fill="url(#toolbarLogoGrad)"/>
+    <polygon points="20,3 35,11.5 35,28.5 20,37 5,28.5 5,11.5" fill="none" stroke="url(#toolbarLogoGrad)" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M20 20V37" stroke="#e9fbff" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="20" cy="20" r="2.5" fill="#fff"/>
   </svg>`,
 
   'nav-all': `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

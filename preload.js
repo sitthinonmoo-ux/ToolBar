@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld('toolbarApi', {
   importSettings: () => ipcRenderer.invoke('settings:import'),
   listApps: () => ipcRenderer.invoke('apps:list'),
   getSysStats: () => ipcRenderer.invoke('sysmonitor:stats'),
+  isFiveMRunning: () => ipcRenderer.invoke('fivem:running'),
   getHardware: () => ipcRenderer.invoke('holo:hardware'),
   getHomeGeo: () => ipcRenderer.invoke('holo:homeGeo'),
   getServerGeo: (address, endpoint) => ipcRenderer.invoke('holo:serverGeo', address, endpoint),

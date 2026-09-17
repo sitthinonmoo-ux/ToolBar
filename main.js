@@ -11,6 +11,7 @@ const { exportSettings, importSettings } = require('./src/exportImport');
 const { APP_CATALOG } = require('./src/appCatalog');
 const { checkInstalledAll, installApp } = require('./src/appInstaller');
 const { getStats } = require('./src/sysMonitor');
+const { isFiveMRunning } = require('./src/fivem');
 const { scanDrivers } = require('./src/driverScan');
 const { setupAutoUpdate, autoUpdater } = require('./src/autoUpdate');
 const debugLog = require('./src/debugLog');
@@ -219,6 +220,7 @@ ipcMain.handle('plugins:run', async (_event, pluginId, params) => {
 ipcMain.handle('health:check', () => runHealthCheck());
 
 ipcMain.handle('sysmonitor:stats', () => getStats());
+ipcMain.handle('fivem:running', () => isFiveMRunning());
 
 ipcMain.handle('holo:hardware', () => getHardware());
 ipcMain.handle('holo:homeGeo', () => getHomeGeo());

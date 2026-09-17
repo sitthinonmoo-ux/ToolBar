@@ -68,6 +68,7 @@ const THEMES = [
   { id: 'amber', swatchColor: '#ffd166' },
   { id: 'emerald', swatchColor: '#34f5b0' },
   { id: 'crimson', swatchColor: '#ff7a7a' },
+  { id: 'black', swatchColor: '#f2f4f8' },
 ];
 const THEME_STORAGE_KEY = 'toolbar.theme';
 const themeSwatchesEl = document.getElementById('theme-swatches');
@@ -171,6 +172,9 @@ document.getElementById('btn-lang').addEventListener('click', () => {
     renderCards();
   }
   renderThemePicker();
+  renderFxPicker();
+  renderDockGame();
+  renderDockPlay();
 });
 
 // ---------------- sidebar / cards ----------------
@@ -189,11 +193,6 @@ function buildToolCard(plugin) {
       <button class="btn btn-primary btn-small">${t('card.open')}</button>
     </div>
   `;
-  card.addEventListener('mousemove', (e) => {
-    const r = card.getBoundingClientRect();
-    card.style.setProperty('--mx', `${e.clientX - r.left}px`);
-    card.style.setProperty('--my', `${e.clientY - r.top}px`);
-  });
   card.querySelector('button').addEventListener('click', () => openModal(plugin));
   return card;
 }
@@ -238,11 +237,6 @@ function buildServerRow(server) {
     avatar.style.backgroundSize = 'cover';
     avatar.style.backgroundPosition = 'center';
   }
-  row.addEventListener('mousemove', (e) => {
-    const r = row.getBoundingClientRect();
-    row.style.setProperty('--mx', `${e.clientX - r.left}px`);
-    row.style.setProperty('--my', `${e.clientY - r.top}px`);
-  });
   // Fire-and-forget: the IPC call itself resolves near-instantly (it just hands the
   // fivem:// URI to the OS), so there's nothing worth disabling the button over — any
   // stutter after this click is Windows/FiveM itself booting the game, not us.
@@ -399,6 +393,8 @@ async function updateSysmonStats() {
   try {
     const stats = await window.toolbarApi.getSysStats();
     if (pcHolo) pcHolo.setStats(stats);
+    if (miniHolo) miniHolo.setStats(stats);
+    updateDockGauges(stats);
     setSysmonGauge('cpu', stats.cpu, `${stats.cpu}%`, 'utilization');
     setSysmonGauge('ram', stats.ram.usedPercent, `${stats.ram.usedPercent}%`, `${stats.ram.usedGB.toFixed(1)} / ${stats.ram.totalGB.toFixed(1)} GB`);
     if (stats.gpu) {
@@ -411,8 +407,14 @@ async function updateSysmonStats() {
   }
 }
 
+// The sidebar dock shows these on every tab: every 2s on Home, 4s elsewhere, 6s in
+// saver mode (a game is probably running and doesn't need us spawning nvidia-smi).
+let sysmonTick = 0;
 setInterval(() => {
-  if (activeCategory === 'home') updateSysmonStats();
+  if (document.hidden) return;
+  sysmonTick++;
+  const every = fx.lite ? 3 : activeCategory === 'home' ? 1 : 2;
+  if (sysmonTick % every === 0) updateSysmonStats();
 }, 2000);
 
 function showView(category) {
@@ -890,11 +892,6 @@ function renderServerCards() {
         <button class="btn btn-primary btn-small btn-play" data-role="play">${iconMarkup('nav-connect')} ${t('connect.play')}</button>
       </div>
     `;
-    card.addEventListener('mousemove', (e) => {
-      const r = card.getBoundingClientRect();
-      card.style.setProperty('--mx', `${e.clientX - r.left}px`);
-      card.style.setProperty('--my', `${e.clientY - r.top}px`);
-    });
     card.querySelector('[data-role="edit"]').addEventListener('click', () => openServerModal(server));
     const playBtn = card.querySelector('[data-role="play"]');
     playBtn.addEventListener('click', () => {
@@ -974,6 +971,7 @@ async function loadServers({ silent = false } = {}) {
     allServers = await window.toolbarApi.listServers();
     renderServerCards();
     renderDashboardServers();
+    renderDockPlay();
     if (serverGlobe) serverGlobe.setServers(allServers);
   } catch (err) {
     if (!silent) serverGrid.innerHTML = `<div class="empty-state">${err.message}</div>`;
@@ -1310,6 +1308,148 @@ function renderDrivers(result) {
 document.getElementById('btn-scan-drivers').addEventListener('click', () => loadDrivers({ force: true }));
 
 // ---------------- HUD chrome: particle field + targeting reticle + panel tilt ----------------
+// ---------------- effects mode ----------------
+// 'auto' drops to the saver look while FiveM is running; 'full' / 'lite' pin it. The
+// OS reduced-motion flag is deliberately ignored: stripped Windows builds switch it on
+// along with every other visual effect, which would leave auto permanently in saver. The saver look is the `fx-lite` class on <html>
+// plus Holo.setLite — both the CSS and the canvas loops key off those.
+const FX_STORAGE_KEY = 'toolbar.fxMode';
+const FX_MODES = ['auto', 'full', 'lite'];
+const fx = { mode: 'auto', gameRunning: false, lite: false };
+try {
+  const saved = localStorage.getItem(FX_STORAGE_KEY);
+  if (FX_MODES.includes(saved)) fx.mode = saved;
+} catch {
+  // storage unavailable — stays on auto for this session
+}
+
+function applyFx() {
+  fx.lite = fx.mode === 'lite' || (fx.mode === 'auto' && fx.gameRunning);
+  document.documentElement.classList.toggle('fx-lite', fx.lite);
+  Holo.setLite(fx.lite);
+  if (fx.lite) finishBoot();
+  renderFxPicker();
+  renderDockGame();
+}
+
+function setFxMode(mode) {
+  fx.mode = mode;
+  try {
+    localStorage.setItem(FX_STORAGE_KEY, mode);
+  } catch {
+    // not remembered, still applies now
+  }
+  applyFx();
+}
+
+function renderFxPicker() {
+  const wrap = document.getElementById('fx-modes');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  for (const mode of FX_MODES) {
+    const btn = document.createElement('button');
+    btn.className = `theme-swatch${mode === fx.mode ? ' active' : ''}`;
+    btn.style.setProperty('--swatch-accent', 'var(--accent-2)');
+    btn.innerHTML = `<span class="theme-swatch-dot"></span> ${t(`fx.${mode}`)}`;
+    btn.addEventListener('click', () => setFxMode(mode));
+    wrap.appendChild(btn);
+  }
+  let status = fx.lite ? 'fx.status.lite' : 'fx.status.full';
+  if (fx.mode === 'auto' && fx.gameRunning) status = 'fx.status.game';
+  document.getElementById('fx-status').textContent = t(status);
+}
+
+async function pollGameRunning() {
+  try {
+    const running = await window.toolbarApi.isFiveMRunning();
+    if (running !== fx.gameRunning) {
+      fx.gameRunning = running;
+      gameSince = running ? Date.now() : 0;
+      applyFx();
+    }
+  } catch {
+    // keep the last known state
+  }
+}
+setInterval(pollGameRunning, 10000);
+
+// ---------------- cursor highlight ----------------
+// One handler feeds --mx/--my to whichever glow surface is under the pointer, so cards,
+// rows, gauges, stages and hologram panels all light up the same way.
+const GLOW_SELECTOR = '.tool-card, .server-row, .sysmon-card, .health-row, .driver-row, .holo-stage, .holo-block';
+let glowEl = null;
+document.addEventListener('mousemove', (e) => {
+  if (fx.lite) return;
+  const el = e.target.closest && e.target.closest(GLOW_SELECTOR);
+  // A hologram panel sits inside a stage — keep the stage's light following along too.
+  const targets = el ? [el] : [];
+  if (el && el.classList.contains('holo-block')) {
+    const stage = el.closest('.holo-stage');
+    if (stage) targets.push(stage);
+  }
+  for (const target of targets) {
+    const r = target.getBoundingClientRect();
+    target.style.setProperty('--mx', `${e.clientX - r.left}px`);
+    target.style.setProperty('--my', `${e.clientY - r.top}px`);
+  }
+  if (glowEl && glowEl !== el && glowEl.classList.contains('holo-block')) glowEl.style.removeProperty('--mx');
+  glowEl = el;
+});
+
+// ---------------- boot sequence ----------------
+// Plays in full once per day; later launches (and saver mode) skip straight in. The app
+// loads underneath the whole time, and a click or key press skips it.
+const BOOT_STORAGE_KEY = 'toolbar.bootDay';
+let bootTimer = null;
+
+function finishBoot() {
+  const el = document.getElementById('boot');
+  if (!el || el.classList.contains('done')) return;
+  clearTimeout(bootTimer);
+  el.classList.add('done');
+  setTimeout(() => el.remove(), 400);
+  const shell = document.querySelector('.app-shell');
+  shell.classList.remove('glitch');
+  void shell.offsetWidth;
+  shell.classList.add('glitch');
+}
+
+function runBoot() {
+  const el = document.getElementById('boot');
+  if (!el) return;
+  let firstToday = true;
+  const today = new Date().toDateString();
+  try {
+    firstToday = localStorage.getItem(BOOT_STORAGE_KEY) !== today;
+    localStorage.setItem(BOOT_STORAGE_KEY, today);
+  } catch {
+    firstToday = false;
+  }
+  if (!firstToday || fx.lite) {
+    el.remove();
+    return;
+  }
+  el.classList.add('play');
+  const lines = [
+    ['SYS.CORE', 'ONLINE'],
+    ['CPU', '…'],
+    ['GPU', '…'],
+    ['NET.MAP', 'LINKING'],
+    ['HOLO.RENDER', 'READY'],
+  ];
+  const linesEl = document.getElementById('boot-lines');
+  linesEl.innerHTML = lines
+    .map(([k, v], i) => `<div class="boot-line" style="--i:${i}"><span>&gt; ${k}</span><b data-boot="${k}">${v}</b></div>`)
+    .join('');
+  window.toolbarApi.getHardware().then((hw) => {
+    linesEl.querySelector('[data-boot="CPU"]').textContent = `${hw.threads} THREADS`;
+    linesEl.querySelector('[data-boot="GPU"]').textContent = hw.gpuModel || '—';
+  }).catch(() => {});
+  el.addEventListener('click', finishBoot);
+  document.addEventListener('keydown', finishBoot, { once: true });
+  bootTimer = setTimeout(finishBoot, 1500);
+}
+
 function initHudChrome() {
   const canvas = document.getElementById('particles');
   const ctx = canvas.getContext('2d');
@@ -1333,6 +1473,19 @@ function initHudChrome() {
     vx: (Math.random() - 0.5) * 0.12,
     vy: (Math.random() - 0.5) * 0.12,
   }));
+  // Follows the theme accent; re-read occasionally rather than every frame.
+  let particleRgb = '47,227,255';
+  let particleRgbAt = 0;
+  function particleColor(alpha) {
+    const now = performance.now();
+    if (now - particleRgbAt > 1000) {
+      particleRgbAt = now;
+      const hex = getComputedStyle(document.documentElement).getPropertyValue('--accent-2').trim().replace('#', '');
+      const n = parseInt(hex, 16);
+      if (hex.length === 6 && !Number.isNaN(n)) particleRgb = `${n >> 16},${(n >> 8) & 255},${n & 255}`;
+    }
+    return `rgba(${particleRgb},${alpha})`;
+  }
   function drawParticles() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const cols = Math.max(1, Math.ceil(canvas.width / CELL));
@@ -1353,7 +1506,7 @@ function initHudChrome() {
       buckets.get(key).push(p);
     }
 
-    ctx.strokeStyle = 'rgba(47,227,255,.12)';
+    ctx.strokeStyle = particleColor(0.12);
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (const p of pts) {
@@ -1380,7 +1533,7 @@ function initHudChrome() {
     }
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(47,227,255,.4)';
+    ctx.fillStyle = particleColor(0.4);
     ctx.beginPath();
     for (const p of pts) {
       ctx.moveTo(p.x + 1.1, p.y);
@@ -1391,6 +1544,7 @@ function initHudChrome() {
 
   const reticle = document.getElementById('reticle');
   const reticleDot = document.getElementById('reticle-dot');
+  const cursorGlow = document.getElementById('cursor-glow');
   const shell = document.querySelector('.app-shell');
   let mouseX = window.innerWidth / 2;
   let mouseY = window.innerHeight / 2;
@@ -1408,8 +1562,8 @@ function initHudChrome() {
     overHot = !!e.target.closest('.btn, .tool-card, .nav-item, .server-card-edit, [data-role="play"], canvas.pointing, .holo-close');
     const px = mouseX / window.innerWidth - 0.5;
     const py = mouseY / window.innerHeight - 0.5;
-    targetTiltY = px * 4.5;
-    targetTiltX = -py * 4.5;
+    targetTiltY = fx.lite ? 0 : px * 4.5;
+    targetTiltX = fx.lite ? 0 : -py * 4.5;
   });
 
   let frameCount = 0;
@@ -1418,12 +1572,13 @@ function initHudChrome() {
     // Particle field is the most expensive part of this loop — halving its rate to
     // ~30fps is imperceptible for slow-drifting dots but meaningfully cuts main-thread
     // work, leaving more headroom for DOM rebuilds when switching categories quickly.
-    if (frameCount % 2 === 0) drawParticles();
+    if (!fx.lite && frameCount % 2 === 0) drawParticles();
 
     dotX += (mouseX - dotX) * 0.35;
     dotY += (mouseY - dotY) * 0.35;
     reticleDot.style.transform = `translate(${dotX}px,${dotY}px) translate(-50%,-50%)`;
     reticleDot.classList.add('show');
+    if (!fx.lite) cursorGlow.style.transform = `translate(${dotX}px,${dotY}px)`;
 
     reticle.style.transform = `translate(${mouseX}px,${mouseY}px) translate(-50%,-50%)`;
     reticle.classList.add('show');
@@ -1442,6 +1597,132 @@ function initHudChrome() {
     requestAnimationFrame(loop);
   }
   loop();
+}
+
+// ---------------- sidebar dock ----------------
+// Mini hologram, live gauges, game status and one-click Play for the top server,
+// visible from every tab.
+let miniHolo = null;
+let gameSince = 0;
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const DOCK_RING = 2 * Math.PI * 15;
+
+function dockGaugeMarkup(id, label) {
+  return `
+    <div class="dock-gauge" id="dock-${id}">
+      <svg viewBox="0 0 36 36"><circle class="dock-ring-track" cx="18" cy="18" r="15"/>
+        <circle class="dock-ring-val" cx="18" cy="18" r="15" stroke-dasharray="${DOCK_RING}" stroke-dashoffset="${DOCK_RING}"/></svg>
+      <b class="mono">--</b><span class="mono">${label}</span>
+    </div>`;
+}
+
+function setDockGauge(id, fraction, text, level) {
+  const el = document.getElementById(`dock-${id}`);
+  if (!el) return;
+  el.querySelector('.dock-ring-val').style.strokeDashoffset = DOCK_RING * (1 - Math.max(0, Math.min(1, fraction)));
+  el.querySelector('b').textContent = text;
+  el.classList.toggle('warn', level === 'warn');
+  el.classList.toggle('bad', level === 'bad');
+}
+
+function updateDockGauges(stats) {
+  const byLoad = (v) => (v >= 90 ? 'bad' : v >= 75 ? 'warn' : '');
+  setDockGauge('cpu', stats.cpu / 100, `${stats.cpu}%`, byLoad(stats.cpu));
+  if (stats.gpu) {
+    const temp = stats.gpu.tempC;
+    setDockGauge('gpu', stats.gpu.utilPercent / 100, `${stats.gpu.utilPercent}%`, byLoad(stats.gpu.utilPercent));
+    setDockGauge('temp', (temp - 30) / 60, `${temp}°`, temp >= 83 ? 'bad' : temp >= 72 ? 'warn' : '');
+  } else {
+    setDockGauge('gpu', 0, '—', '');
+    setDockGauge('temp', 0, '—', '');
+  }
+}
+
+function renderDockGame() {
+  const el = document.getElementById('dock-game');
+  if (!el) return;
+  let clock = '';
+  if (fx.gameRunning && gameSince) {
+    const sec = Math.floor((Date.now() - gameSince) / 1000);
+    const hh = Math.floor(sec / 3600);
+    const mm = String(Math.floor(sec / 60) % 60).padStart(2, '0');
+    const ss = String(sec % 60).padStart(2, '0');
+    clock = hh ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
+  }
+  el.classList.toggle('running', fx.gameRunning);
+  el.innerHTML = `
+    <div class="dock-game-row"><span class="dock-dot"></span><span>FIVEM</span>
+      <b>${fx.gameRunning ? t('dock.running') : t('dock.idle')}</b></div>
+    <div class="dock-game-row dim"><span>${clock ? t('dock.session', clock) : '&nbsp;'}</span>
+      <b class="${fx.lite ? 'lite' : ''}">FX ${fx.lite ? 'SAVER' : 'FULL'}</b></div>`;
+}
+setInterval(() => {
+  if (fx.gameRunning && !document.hidden) renderDockGame();
+}, 1000);
+
+let dockPing = { id: null, ms: null, at: 0 };
+
+async function renderDockPlay() {
+  const el = document.getElementById('dock-play');
+  if (!el) return;
+  const server = allServers.find((s) => s.address);
+  if (!server) {
+    el.innerHTML = `<button class="dock-play-empty" data-role="add">+ ${esc(t('connect.addServer'))}</button>`;
+    el.querySelector('[data-role="add"]').addEventListener('click', () => {
+      document.querySelector('.nav-item[data-category="connect"]').click();
+    });
+    return;
+  }
+  if (dockPing.id !== server.id) dockPing = { id: server.id, ms: null, at: 0 };
+  const ping = dockPing.ms != null ? `${dockPing.ms} ms` : '— ms';
+  const pingTone = dockPing.ms == null ? '' : dockPing.ms <= 40 ? 'good' : dockPing.ms <= 100 ? 'warn' : 'bad';
+  el.innerHTML = `
+    <div class="dock-play-card">
+      <span class="dock-play-avatar">${server.logo ? '' : esc((server.name || '?').trim().slice(0, 2).toUpperCase())}</span>
+      <div class="dock-play-info">
+        <div class="dock-play-name">${esc(server.name)}</div>
+        <div class="dock-play-stat mono"><span data-role="players">…</span><span class="${pingTone}"> · ${ping}</span></div>
+      </div>
+      <button class="dock-play-btn" title="${esc(t('connect.play'))}">${iconMarkup('nav-connect')}</button>
+    </div>`;
+  if (server.logo) el.querySelector('.dock-play-avatar').style.backgroundImage = `url(${server.logo})`;
+  el.querySelector('.dock-play-btn').addEventListener('click', () => launchWithToast(server));
+  try {
+    const status = await getServerStatusCached(server.address);
+    const playersEl = el.querySelector('[data-role="players"]');
+    if (!playersEl || !playersEl.isConnected) return;
+    playersEl.textContent = status && status.online
+      ? (status.maxPlayers != null ? `${status.players}/${status.maxPlayers}` : `${status.players}`)
+      : t('dock.offline');
+    playersEl.classList.toggle('bad', !(status && status.online));
+    // an offline server's ping says nothing useful and only crowds the line
+    if (!(status && status.online)) playersEl.nextElementSibling.remove();
+    // Ping costs two TCP connects, so refresh it at most every 30s and not mid-game.
+    if (!fx.lite && Date.now() - dockPing.at > 30000) {
+      dockPing.at = Date.now();
+      const geo = await window.toolbarApi.getServerGeo(server.address, status && status.endpoint);
+      if (dockPing.id === server.id && geo && geo.pingMs != null) {
+        dockPing.ms = geo.pingMs;
+        renderDockPlay();
+      }
+    }
+  } catch {
+    // leave the placeholders; next refresh tries again
+  }
+}
+setInterval(() => {
+  if (!document.hidden) renderDockPlay();
+}, 30000);
+
+function initDock() {
+  document.getElementById('dock-gauges').innerHTML =
+    dockGaugeMarkup('cpu', 'CPU') + dockGaugeMarkup('gpu', 'GPU') + dockGaugeMarkup('temp', 'TEMP');
+  miniHolo = Holo.createPcHologram(document.getElementById('dock-holo'), {
+    getHardware: () => window.toolbarApi.getHardware(),
+    mini: true,
+  });
+  renderDockGame();
+  renderDockPlay();
 }
 
 // ---------------- holograms (Home) ----------------
@@ -1482,6 +1763,10 @@ renderThemePicker();
 positionNavIndicator(navList.querySelector('.nav-item.active'));
 initHudChrome();
 initHolograms();
+initDock();
+applyFx();
+runBoot();
+pollGameRunning();
 document.querySelector('.app-shell').classList.add('glitch');
 loadPlugins();
 loadHealthCheck();
