@@ -1397,9 +1397,8 @@ document.addEventListener('mousemove', (e) => {
 });
 
 // ---------------- boot sequence ----------------
-// Plays in full once per day; later launches (and saver mode) skip straight in. The app
-// loads underneath the whole time, and a click or key press skips it.
-const BOOT_STORAGE_KEY = 'toolbar.bootDay';
+// Plays on every launch (skipped in saver mode). The app loads underneath the whole
+// time, and a click or key press skips it.
 let bootTimer = null;
 
 function finishBoot() {
@@ -1417,15 +1416,7 @@ function finishBoot() {
 function runBoot() {
   const el = document.getElementById('boot');
   if (!el) return;
-  let firstToday = true;
-  const today = new Date().toDateString();
-  try {
-    firstToday = localStorage.getItem(BOOT_STORAGE_KEY) !== today;
-    localStorage.setItem(BOOT_STORAGE_KEY, today);
-  } catch {
-    firstToday = false;
-  }
-  if (!firstToday || fx.lite) {
+  if (fx.lite) {
     el.remove();
     return;
   }
