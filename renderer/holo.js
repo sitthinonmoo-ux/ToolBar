@@ -28,6 +28,9 @@ const Holo = (() => {
   // Home tab doesn't compete with a running game for CPU/GPU time.
   let lite = false;
   const LITE_FRAME_MS = 66;
+  // Canvas redraws are the app's main CPU cost, so stages idle at 30fps and only run at
+  // full rate while the pointer is on them (dragging, hovering, picking).
+  const IDLE_FRAME_MS = 1000 / 30;
 
   function readPalette() {
     const cs = getComputedStyle(document.documentElement);
@@ -46,11 +49,17 @@ const Holo = (() => {
 
   // Canvas sizing + a render loop that only runs while the canvas is actually on screen
   // and the window is visible, so the Home tab costs nothing once you leave it.
-  function createStage(canvas, draw) {
+  function createStage(canvas, draw, { alwaysIdle = false } = {}) {
     const ctx = canvas.getContext('2d');
-    const st = { w: 0, h: 0, dpr: 1, inView: false, pal: readPalette() };
+    const st = { w: 0, h: 0, dpr: 1, inView: false, active: false, pal: readPalette() };
+    if (!alwaysIdle) {
+      const host = canvas.parentElement;
+      host.addEventListener('pointerenter', () => (st.active = true));
+      host.addEventListener('pointerleave', () => (st.active = false));
+    }
     let running = false;
     let last = 0;
+    let lastSlot = -1;
     let palAt = 0;
 
     new ResizeObserver(() => {
@@ -72,9 +81,17 @@ const Holo = (() => {
         running = false;
         return;
       }
-      if (lite && last && t - last < LITE_FRAME_MS) {
-        requestAnimationFrame(frame);
-        return;
+      // Capped stages draw on shared time slots (same rAF timestamp for every loop in a
+      // frame), so all of them — and the HUD loop — land on the same vsyncs and the
+      // compositor really only works at the capped rate.
+      const slotMs = lite ? LITE_FRAME_MS : st.active ? 0 : IDLE_FRAME_MS;
+      if (slotMs) {
+        const slot = Math.floor(t / slotMs);
+        if (last && slot === lastSlot) {
+          requestAnimationFrame(frame);
+          return;
+        }
+        lastSlot = slot;
       }
       const dt = last ? Math.min(lite ? 100 : 50, t - last) : 16;
       last = t;
@@ -754,7 +771,7 @@ const Holo = (() => {
       }
     });
 
-    createStage(canvas, draw);
+    createStage(canvas, draw, { alwaysIdle: mini });
     async function refreshHardware() {
       try {
         hw = await getHardware();

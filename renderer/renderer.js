@@ -1533,6 +1533,41 @@ function initHudChrome() {
     ctx.fill();
   }
 
+  // Looping decorations (scan lines, sweeping bands, pulsing dots) are stepped from this
+  // loop at 30fps instead of CSS animations: any running CSS animation makes Chromium
+  // composite at the full 60Hz, which was most of the app's idle CPU.
+  const ambientScan = document.querySelector('.ambient-scan');
+  let decorEls = null;
+  let decorAt = 0;
+  const easeInOut = (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+  function tickDecor() {
+    const now = performance.now();
+    if (!decorEls || now - decorAt > 2000) {
+      decorAt = now;
+      const sweeps = (sel) => [...document.querySelectorAll(sel)].map((host) => {
+        let el = host.querySelector(':scope > .decor-sweep');
+        if (!el) {
+          el = document.createElement('i');
+          el.className = 'decor-sweep';
+          host.prepend(el);
+        }
+        return el;
+      });
+      decorEls = { stages: sweeps('.holo-stage'), lines: sweeps('.section-line') };
+    }
+    const scan = (now / 8000) % 1;
+    const scanAlpha = scan < 0.08 ? scan / 0.08 : scan > 0.92 ? (1 - scan) / 0.08 : 1;
+    ambientScan.style.transform = `translateY(${(scan * window.innerHeight).toFixed(1)}px)`;
+    ambientScan.style.opacity = (0.3 * scanAlpha).toFixed(3);
+    const sweep = `translateY(${(-120 + ((now / 5500) % 1) * 1020).toFixed(1)}%)`;
+    decorEls.stages.forEach((el) => el.offsetParent && (el.style.transform = sweep));
+    const line = `translateX(${(-100 + easeInOut((now / 3500) % 1) * 434).toFixed(1)}%)`;
+    decorEls.lines.forEach((el) => el.offsetParent && (el.style.transform = line));
+    const pulse = (0.7 + 0.3 * Math.cos((now / 1600) * Math.PI * 2)).toFixed(3);
+    // re-queried every tick: the dock re-renders its status dot each second
+    document.querySelectorAll('.holo-hud-dot, .dock-game.running .dock-dot').forEach((el) => (el.style.opacity = pulse));
+  }
+
   const reticle = document.getElementById('reticle');
   const reticleDot = document.getElementById('reticle-dot');
   const cursorGlow = document.getElementById('cursor-glow');
@@ -1546,6 +1581,11 @@ function initHudChrome() {
   let targetTiltX = 0;
   let targetTiltY = 0;
   let overHot = false;
+  let lastX = -1;
+  let lastY = -1;
+  let lastHot = null;
+  reticle.classList.add('show');
+  reticleDot.classList.add('show');
 
   document.addEventListener('mousemove', (e) => {
     mouseX = e.clientX;
@@ -1557,23 +1597,33 @@ function initHudChrome() {
     targetTiltX = fx.lite ? 0 : -py * 4.5;
   });
 
-  let frameCount = 0;
-  function loop() {
-    frameCount++;
-    // Particle field is the most expensive part of this loop — halving its rate to
-    // ~30fps is imperceptible for slow-drifting dots but meaningfully cuts main-thread
-    // work, leaving more headroom for DOM rebuilds when switching categories quickly.
-    if (!fx.lite && frameCount % 2 === 0) drawParticles();
+  let decorSlot = -1;
+  function loop(t = performance.now()) {
+    // Particles and decorations run at 30fps, on the same time slots as the hologram
+    // stages (see createStage in holo.js).
+    const slot = Math.floor(t / (1000 / 30));
+    if (!fx.lite && slot !== decorSlot) {
+      decorSlot = slot;
+      drawParticles();
+      tickDecor();
+    }
 
-    dotX += (mouseX - dotX) * 0.35;
-    dotY += (mouseY - dotY) * 0.35;
-    reticleDot.style.transform = `translate(${dotX}px,${dotY}px) translate(-50%,-50%)`;
-    reticleDot.classList.add('show');
-    if (!fx.lite) cursorGlow.style.transform = `translate(${dotX}px,${dotY}px)`;
-
-    reticle.style.transform = `translate(${mouseX}px,${mouseY}px) translate(-50%,-50%)`;
-    reticle.classList.add('show');
-    reticle.classList.toggle('hot', overHot);
+    // Only touch styles while the cursor is actually moving — rewriting an unchanged
+    // transform every frame still costs a style/composite pass each vsync.
+    const moving = Math.abs(mouseX - dotX) > 0.1 || Math.abs(mouseY - dotY) > 0.1 || mouseX !== lastX || mouseY !== lastY;
+    if (moving) {
+      dotX += (mouseX - dotX) * 0.35;
+      dotY += (mouseY - dotY) * 0.35;
+      reticleDot.style.transform = `translate(${dotX}px,${dotY}px) translate(-50%,-50%)`;
+      if (!fx.lite) cursorGlow.style.transform = `translate(${dotX}px,${dotY}px)`;
+      reticle.style.transform = `translate(${mouseX}px,${mouseY}px) translate(-50%,-50%)`;
+      lastX = mouseX;
+      lastY = mouseY;
+    }
+    if (overHot !== lastHot) {
+      reticle.classList.toggle('hot', overHot);
+      lastHot = overHot;
+    }
 
     const prevTiltX = tiltX;
     const prevTiltY = tiltY;
